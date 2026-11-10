@@ -561,3 +561,55 @@ either XOR-masked and then FastLZ'd, or this chunk does not route through
 
 `analysis/fastlz.py` implements both levels from the published format so the
 tool can stay binary-free once the mask question is settled.
+
+
+---
+
+# Parameter slots inside the FM8E payload
+
+With the codec solved, a preset parses end to end:
+
+```
+.nfm8 -> item tree -> [u32 plain][u32 comp][FastLZ] -> inner item tree (e.g. 4029 B)
+      -> 'tsrp' chunk -> 'E8MF' -> u32 0xcf -> u32 9148 -> 4 x [u32 len + ASCII]
+      -> parameter sections
+```
+
+The four strings are `default` x4 on a fresh patch; `9148` is `0x23bc`.
+
+## Mapping VST indices to payload offsets
+
+Probe: load the baseline chunk, set one VST parameter to 0.9, re-read the chunk,
+decompress and diff the payload. Values must be compared as *engine* values --
+the stored float is not the VST 0..1 value (a param at 0.9 does not appear as
+`3f 66 66 66` anywhere), so the diff is the reliable probe.
+
+Measured with one fresh process per parameter:
+
+| VST params | payload offsets | layout |
+|---|---|---|
+| 0-20 | `0xc10 + 4i` | contiguous big-endian f32 |
+| 21-25 | `0x240 + 4(i-21)` | contiguous big-endian f32 |
+| 26-29 | `0x2a2 + 0x4c*k` | stride 76 bytes |
+| 30+ | `0xc2`, `0xc4`, `0xc8`, ... | packed, 1-3 byte deltas |
+
+The payload is 3825 bytes, so `0xc10 + 4*183 = 0xeec` is the last slot that fits
+in the trailing block -- the sections mirror the loops in `FM8Program::write`
+(a 138-float run from `this+0x50` skipping 11 and 12, a 4x19 run from
+`this+0x290`, and further runs).
+
+## Caveat about the batch scan
+
+`vsthost scan` (reload + setParameter inside one process) is **not** usable for
+this: repeated reloads leak state between iterations, so every file differs in
+the same volatile location and the first-diff signal becomes noise. One process
+per parameter is clean (2 changed bytes, exactly one 4-byte slot). Covering all
+1094 parameters that way is ~27 minutes of wall clock and is the next mechanical
+step.
+
+## Repo state
+
+The codec is bidirectional and byte-exact, so the acceptance test from the
+original plan is now reachable: build a payload from a parameter vector, FastLZ
+encode it, rewrap the tree, and diff against FM8's own output with uuid sites
+masked.
