@@ -788,3 +788,35 @@ through `effSetChunk`:
 
 So the parameter value survives a real round trip through the plugin, and the
 payload comes back bit-identical.
+
+
+---
+
+# Off-grid resampling: what it changed
+
+The first sweeps sampled 0..1 in eighths, a regular grid. A straight line fits
+nine points on a regular grid easily, so some parameters were accepted as affine
+that are not. A second sweep at 0.05..0.95 in tenths (19 samples per parameter in
+total) exposes them:
+
+* 86 parameters are **not** affine. Their nine eighth-points lie on a line, their
+  nineteen mixed points do not. These are the curved fields (frequency-like
+  mappings), and they are the real remainder of the project.
+* everything else keeps its affine model, and the fit is unchanged.
+
+Fitting on nineteen points while still validating against a separate unseen
+v=0.9 chunk gives 883 exact versus 976 for the nine-point fit. That looks worse
+but is not: the nine-point model is right on the grid it was fitted to and wrong
+off it, while the nineteen-point diagnosis correctly refuses to produce a closed
+form for the 86 curved fields. The committed schema keeps the nine-point fit and
+its documented 976/44/10 split, because for those parameters it predicts the
+unseen value correctly; the curved 86 need a curve family before they can be
+written honestly.
+
+Practical consequence for the writer: `fm8param` is reliable for the 976
+parameters with a closed form. Writing a curved field through an affine model
+produces a plausible but wrong value, so those 86 should be treated as
+read-only until their curve is identified.
+
+The raw sweeps are in `tmp/` and are not committed (they are regenerable and
+large); the recipe is `vsthost sweep <dir> <param> 0.05 0.95 9`.
