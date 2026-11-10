@@ -636,3 +636,58 @@ So the payload mixes at least three encodings: 4-byte big-endian floats, packed
 bit fields, and strided records. Decoding the packed ranges needs a bit-level
 reader driven by the same walk that `FM8Program::write` performs, not a per-slot
 table.
+
+
+---
+
+# Field encodings inside the payload (measured)
+
+## Endianness correction
+
+The FM8E payload is **little-endian throughout**. An earlier note claimed big-endian
+floats; that was wrong. `45 38 4d 46` is little-endian `0x464d3845`, and a stored
+parameter value of 0.1 reads `cd cc cc 3d`, which is little-endian float32. The
+earlier mistake came from scanning for big-endian patterns and concluding the
+values were absent, when they were present the whole time in the other order.
+
+## Classes
+
+Sampling each parameter across 0..1 (one host sweep per parameter) shows the
+stored value falls into a few families:
+
+| class | stored value | example |
+|---|---|---|
+| `f32` | VST value verbatim as LE float32 | params 21, 22, 23, 45, 51 |
+| `f32_x64` | VST value * 64 as LE float32 | params 764, 790 |
+| `u8_pct` | `round(v * 100)` | params 200, 300, 400, 500, 700 |
+| `u8_bipolar_200` | `(157 + round(v*199)) mod 256`, i.e. signed -99..+100 | params 600, 900, 1000 |
+| `u8_bool` | `0x00` below 0.5, `0x80` at or above | params 30, 1090 |
+
+`u8_bipolar_200` wraps past 127: at v=0.5 the byte goes 232 -> 0. That is a
+signed 8-bit field whose base is -99 and whose range is 199, not an unsigned one.
+
+`u8_bool` writing 0x80 rather than 1 is suspicious and is probably a *bitfield*
+byte: params 30 and 1090 both land on payload byte 0xc2, so they may be two flags
+in one byte. Not yet resolved.
+
+## Coverage
+
+Of 1094 VST parameters:
+
+* 1030 have a single located field (799 one-byte, 113 two-byte, 40 three-byte,
+  78 four-byte);
+* 56 produce no stored change at all (performance/UI-only);
+* 6 cascade (a mode switch that rewrites a whole section) and are handled
+  separately.
+
+Field offsets and widths are committed as `data/param_schema.json`; sampled
+transfer curves as `data/param_curves.json`. Both are measurements taken on the
+author's own installed copy and contain no Native Instruments code or data.
+
+## Licensing note
+
+FastLZ is a public format (Ariya Hidayat, MIT). `analysis/fastlz.py` is an
+independent implementation written from the published format and from black-box
+observation of emitted streams; it contains no third-party or vendor source. No
+NI code, no disassembly listings, no factory presets and no binaries are
+committed to this repository - only measurements and original code.
