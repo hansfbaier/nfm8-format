@@ -1,26 +1,30 @@
-"""FastLZ (levels 1 and 2) -- the codec behind FM8 preset payloads.
+"""FastLZ levels 1 and 2 -- the codec behind FM8 preset payloads.
 
-Verified against the plugin: for a real .nfm8 the byte range
-[file_offset_of_header + 8 : +8 + compressedSize] is a FastLZ level-1 stream
-whose decoded length equals the declared uncompressed size exactly.
+Verified against the plugin: a real .nfm8 stores a
+`[u32 uncompressedSize][u32 compressedSize][FastLZ stream]` record, and the
+stream decodes to exactly the declared size.  The format is Ariya Hidayat's
+FastLZ; both directions are reimplemented here from the published format and
+from the compiled FM8 code so that no Native Instruments code is needed at
+runtime.
 
-The format is Ariya Hidayat's FastLZ, reimplemented here from the published
-format so that no Native Instruments code is needed at runtime.
-
-Stream selection: level = src[0] >> 5, 0 -> level 1, 1 -> level 2.
-Token format:
-    ctrl = src[ip++]
+Token format (decoder):
+    n = ctrl >> 5                       # ctrl = src[ip]
     if ctrl >= 32:
-        length = (ctrl >> 5) - 1
-        offset = (ctrl & 31) << 8
-        if length == 6: length += src[ip++]
-        ref = len(out) - offset - src[ip++] - 1     # distance is biased by 1
-        length += 3
+        if n == 7: n = 6 + extra        # extra byte follows
+        length = n + 2
+        ref = len(out) - ((ctrl & 31) << 8) - src[ip] - 1
     else:
-        copy (ctrl + 1) literal bytes
+        copy n+1 literal bytes
 """
+import struct
+
+HASH_SIZE = 1 << 13
+MAX_COPY = 32
+MAX_DISTANCE = 8191
+MAX_LEN = 264
 
 
+# ---------------------------------------------------------------- decoding
 def decompress(src, level=None, maxout=1 << 24):
     if level is None:
         if not src:
@@ -35,18 +39,18 @@ def decompress(src, level=None, maxout=1 << 24):
     ip += 1
     while True:
         if ctrl >= 32:
-            length = (ctrl >> 5) - 1
-            offset = (ctrl & 31) << 8
-            if length == 6:
+            nbits = ctrl >> 5
+            if nbits == 7:
                 if ip >= n:
                     break
-                length += src[ip]
+                nbits = 7 + src[ip]
                 ip += 1
+            length = nbits + 2
             if ip >= n:
                 break
+            offset = (ctrl & 31) << 8
             ref = len(out) - offset - src[ip] - 1
             ip += 1
-            length += 3
             if ref < 0:
                 return None
             try:
@@ -67,8 +71,6 @@ def decompress(src, level=None, maxout=1 << 24):
 
 
 def decompress_block(buf, off=0):
-    """Decode one `[u32 plainSize][u32 compSize][stream]` record at `off`."""
-    import struct
     plain, comp = struct.unpack_from('<II', buf, off)
     data = decompress(buf[off + 8:off + 8 + comp], 1, plain + 64)
     if data is None or len(data) != plain:
@@ -77,12 +79,10 @@ def decompress_block(buf, off=0):
 
 
 def find_blocks(buf, min_size=64):
-    """Locate every plausible embedded FastLZ block in `buf`."""
-    import struct
     out = []
     for i in range(len(buf) - 9):
         plain, comp = struct.unpack_from('<II', buf, i)
-        if not (min_size <= comp <= 0x20000 and min_size <= plain <= 0x200000):
+        if not (min_size <= comp < plain <= 0x200000):
             continue
         if (buf[i + 8] >> 5) != 0:
             continue
@@ -92,33 +92,18 @@ def find_blocks(buf, min_size=64):
     return out
 
 
-if __name__ == '__main__':
-    import sys
-    path = sys.argv[1] if len(sys.argv) > 1 else 'tmp/base.bin'
-    data = open(path, 'rb').read()
-    blocks = find_blocks(data)
-    print('%s: %d bytes, FastLZ blocks at %s' % (path, len(data), [hex(b) for b in blocks]))
-    for b in blocks:
-        dec = decompress_block(data, b)
-        print('  block %#x -> %d bytes, head %s' % (b, len(dec), dec[:16].hex(' ')))
+# ---------------------------------------------------------------- encoding
+def _hash(buf, i):
+    """Three-byte hash, as compiled into FM8's fastlz1_compress.
 
-
-# --------------------------------------------------------------------------
-# Level-1 compressor (FastLZ reference algorithm)
-# --------------------------------------------------------------------------
-HASH_LOG = 13
-HASH_SIZE = 1 << HASH_LOG
-MAX_COPY = 32
-MAX_DISTANCE = 8191
-MAX_LEN = 263   # longest match one token can encode: 8 + 255
-
-
-def _hash(v):
-    return ((v * 2654435769) & 0xffffffff) >> (32 - HASH_LOG)
-
-
-def _read32(buf, i):
-    return buf[i] | (buf[i + 1] << 8) | (buf[i + 2] << 16) | (buf[i + 3] << 24)
+    h = (((b2<<8)|b1) ^ ((b1<<8)|b0) ^ (((b1<<8)|b0) >> 3)) & 0x1fff
+    """
+    s0 = buf[i]
+    s1 = buf[i + 1]
+    s2 = buf[i + 2]
+    b = (s2 << 8) | s1
+    c = (s1 << 8) | s0
+    return (b ^ c ^ (c >> 3)) & 0x1FFF
 
 
 def _literals(out, src, start, runs):
@@ -136,48 +121,56 @@ def _literals(out, src, start, runs):
 
 
 def _match(out, length, distance):
-    """Encode a match.  Decoder: n = ctrl >> 5; if n == 7: n = 6 + extra;
-    total = n + 2."""
+    # FM8 splits matches of 265+ bytes into 262-byte chunks (extra byte 0xfd)
+    while length >= 265:
+        out.append(0xE0 | (distance >> 8))
+        out.append(0xFD)
+        out.append(distance & 0xFF)
+        length -= 262
     if length <= 8:
         out.append(((length - 2) << 5) | (distance >> 8))
         out.append(distance & 0xFF)
     else:
-        out.append((7 << 5) | (distance >> 8))
-        out.append(min(length - 9, 255))
+        out.append(0xE0 | (distance >> 8))
+        out.append(length - 9)
         out.append(distance & 0xFF)
 
 
-def compress(src, level=1):
-    """FastLZ level-1 compressor.  Emits [run][literals] and [token][offset]."""
+def compress(src):
+    """FastLZ level-1 compressor matching NI::SOUND::fastlz1_compress."""
     n = len(src)
-    if n < 4:
+    if n <= 3:
         return None
-    ip_limit = n - 12
-    ip_bound = n - 4
     htab = [0] * HASH_SIZE
     out = bytearray()
-    ip = 0
+    ip = 2
     anchor = 0
-    while ip < ip_limit:
-        hval = _read32(src, ip)
-        h = _hash(hval)
+    limit = n - 12
+    bound = n - 2
+    while ip < limit:
+        h = _hash(src, ip)
         ref = htab[h]
         htab[h] = ip
         distance = ip - ref - 1
-        if ref < ip and distance < MAX_DISTANCE and _read32(src, ref) == hval:
+        if (ref < ip and distance < MAX_DISTANCE
+                and src[ref] == src[ip]
+                and src[ref + 1] == src[ip + 1]
+                and src[ref + 2] == src[ip + 2]):
             if anchor < ip:
                 _literals(out, src, anchor, ip - anchor)
             start = ip
             ip += 3
-            ref += 3
-            while ip < ip_bound and (ip - start) < MAX_LEN and src[ip] == src[ref]:
+            r = ref + 3
+            while ip < bound and src[ip] == src[r]:
                 ip += 1
-                ref += 1
+                r += 1
             _match(out, ip - start, distance)
             anchor = ip
-            if ip < ip_limit:
-                htab[_hash(_read32(src, ip - 2))] = ip - 2
-                htab[_hash(_read32(src, ip - 1))] = ip - 1
+            if ip + 2 < n:
+                for back in (2, 1):
+                    j = ip - back
+                    if j + 2 < n:
+                        htab[_hash(src, j)] = j
         else:
             ip += 1
     if anchor < n:
@@ -185,3 +178,15 @@ def compress(src, level=1):
     return bytes(out)
 
 
+if __name__ == '__main__':
+    import sys
+    path = sys.argv[1] if len(sys.argv) > 1 else 'tmp/base.bin'
+    data = open(path, 'rb').read()
+    blocks = find_blocks(data)
+    print('%s: %d bytes, FastLZ blocks at %s' % (path, len(data), [hex(b) for b in blocks]))
+    for b in blocks:
+        dec = decompress_block(data, b)
+        comp = data[b + 8:b + 8 + struct.unpack_from('<I', data, b + 4)[0]]
+        re = compress(dec)
+        print('  block %#x -> %d bytes, head %s' % (b, len(dec), dec[:16].hex(' ')))
+        print('    recompressed %d bytes, identical to stored: %s' % (len(re), re == comp))
