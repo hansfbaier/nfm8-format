@@ -613,3 +613,26 @@ The codec is bidirectional and byte-exact, so the acceptance test from the
 original plan is now reachable: build a payload from a parameter vector, FastLZ
 encode it, rewrap the tree, and diff against FM8's own output with uuid sites
 masked.
+
+
+## Full sweep result
+
+Ran the probe for all 1094 parameters (8 parallel host processes, 2 minutes) and
+stored the measurement in `data/param_payload_offsets.json` (1092 mapped).
+
+Structure that falls out of the offsets:
+
+* params 0-20 are a clean contiguous big-endian f32 block at `0xc10 + 4i`
+  (stride 4, first differing byte at the slot's +1);
+* params 21-25 likewise at `0x240 + 4i`;
+* params 26-29 advance by 0x4c (76 bytes) -- the same stride as the 4x19 loop in
+  `FM8Program::write`;
+* the large middle range (params ~165-628) advances by 1 byte over
+  `0x256..0x495`, i.e. it is **bit-packed**, which is exactly why the early
+  "variable-length token" observations looked so strange;
+* several later ranges advance by 90 bytes and by multiples of 76.
+
+So the payload mixes at least three encodings: 4-byte big-endian floats, packed
+bit fields, and strided records. Decoding the packed ranges needs a bit-level
+reader driven by the same walk that `FM8Program::write` performs, not a per-slot
+table.
