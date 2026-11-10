@@ -203,7 +203,14 @@ int main(int argc, char **argv)
 
     const char *cmd = argv[2];
 
-    if (!strcmp(cmd, "chunk") && argc >= 4) {
+    if (!strcmp(cmd, "chunkp") && argc >= 4) {
+        /* effGetChunk with the "program" flag instead of the "bank" flag */
+        void *buf = NULL; intptr_t len = 0;
+        len = fx->dispatcher(fx, effGetChunk, 1, 0, &buf, 0);
+        if (len <= 0) { fprintf(stderr, "effGetChunk(program) failed: %ld\n", (long)len); return 1; }
+        printf("program chunk len=%ld\n", (long)len);
+        saveFile(argv[3], buf, len);
+    } else if (!strcmp(cmd, "chunk") && argc >= 4) {
         void *buf = NULL; intptr_t len = 0;
         len = fx->dispatcher(fx, effGetChunk, 0, 0, &buf, 0);
         if (len <= 0) { fprintf(stderr, "effGetChunk failed: %ld\n", (long)len); return 1; }
