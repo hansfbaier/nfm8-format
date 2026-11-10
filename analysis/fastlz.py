@@ -1,86 +1,99 @@
-"""FastLZ decompressor (levels 1 and 2).
+"""FastLZ (levels 1 and 2) -- the codec behind FM8 preset payloads.
 
-FastLZ is Ariya Hidayat's LZ77 variant; the FM8 preset container uses
-NI::SOUND::fastlz_compress for the EncryptionItem payload.  Implemented from
-the published format so the tool needs no NI code at runtime.
+Verified against the plugin: for a real .nfm8 the byte range
+[file_offset_of_header + 8 : +8 + compressedSize] is a FastLZ level-1 stream
+whose decoded length equals the declared uncompressed size exactly.
+
+The format is Ariya Hidayat's FastLZ, reimplemented here from the published
+format so that no Native Instruments code is needed at runtime.
+
+Stream selection: level = src[0] >> 5, 0 -> level 1, 1 -> level 2.
+Token format:
+    ctrl = src[ip++]
+    if ctrl >= 32:
+        length = (ctrl >> 5) - 1
+        offset = (ctrl & 31) << 8
+        if length == 6: length += src[ip++]
+        ref = len(out) - offset - src[ip++]          # no +1 bias
+        length += 3
+    else:
+        copy (ctrl + 1) literal bytes
 """
 
 
-def decompress(src, level=1, maxout=1 << 20):
+def decompress(src, level=None, maxout=1 << 24):
+    if level is None:
+        if not src:
+            return b''
+        level = 1 if (src[0] >> 5) == 0 else 2
     ip = 0
     n = len(src)
     out = bytearray()
     if n == 0:
         return bytes(out)
-    ctrl = src[ip] & 31
+    ctrl = src[ip]
     ip += 1
     while True:
         if ctrl >= 32:
             length = (ctrl >> 5) - 1
-            ofs = (ctrl & 31) << 8
-            if level == 1:
-                if length == 6:
-                    if ip >= n:
-                        break
-                    length += src[ip]; ip += 1
+            offset = (ctrl & 31) << 8
+            if length == 6:
                 if ip >= n:
                     break
-                ref = len(out) - ofs - src[ip] - 1; ip += 1
-                length += 3
-            else:
-                if length == 7:
-                    if ip >= n:
-                        break
-                    length += src[ip]; ip += 1
-                if ip >= n:
-                    break
-                ref = len(out) - ofs - src[ip] - 1; ip += 1
-                length += 3
+                length += src[ip]
+                ip += 1
+            if ip >= n:
+                break
+            ref = len(out) - offset - src[ip]
+            ip += 1
+            length += 3
             if ref < 0:
                 return None
             for _ in range(length):
                 out.append(out[ref])
                 ref += 1
-                if len(out) >= maxout:
-                    return bytes(out)
         else:
             length = ctrl + 1
-            if level == 2 and length == 32:
-                # level 2 uses a longer literal run
-                while ip < n:
-                    b = src[ip]; ip += 1; length += b
-                    if b != 255:
-                        break
-            if ip + length > n:
-                out += src[ip:]
-                ip = n
-            else:
-                out += src[ip:ip + length]
-                ip += length
-        if ip >= n:
+            out += src[ip:ip + length]
+            ip += length
+        if ip >= n or len(out) >= maxout:
             break
-        ctrl = src[ip]; ip += 1
-        if len(out) >= maxout:
-            break
+        ctrl = src[ip]
+        ip += 1
     return bytes(out)
+
+
+def decompress_block(buf, off=0):
+    """Decode one `[u32 plainSize][u32 compSize][stream]` record at `off`."""
+    import struct
+    plain, comp = struct.unpack_from('<II', buf, off)
+    data = decompress(buf[off + 8:off + 8 + comp], 1, plain + 64)
+    if data is None or len(data) != plain:
+        return None
+    return data
+
+
+def find_blocks(buf, min_size=64):
+    """Locate every plausible embedded FastLZ block in `buf`."""
+    import struct
+    out = []
+    for i in range(len(buf) - 9):
+        plain, comp = struct.unpack_from('<II', buf, i)
+        if not (min_size <= comp <= 0x20000 and min_size <= plain <= 0x200000):
+            continue
+        if (buf[i + 8] >> 5) != 0:
+            continue
+        if decompress(buf[i + 8:i + 8 + comp], 1, plain + 64) is not None:
+            out.append(i)
+    return out
 
 
 if __name__ == '__main__':
     import sys
-    target = open('tmp/dblock.bin', 'rb').read()
-    f = open('tmp/base.bin', 'rb').read()
-    for start in (0x40e, 0x417, 0x419, 0x41a, 0x48d):
-        for lvl in (1, 2):
-            for extra in (0, 1, 2, 3):
-                try:
-                    o = decompress(f[start + extra:], lvl, 1 << 16)
-                except Exception:
-                    continue
-                if not o:
-                    continue
-                m = 0
-                while m < min(len(o), len(target)) and o[m] == target[m]:
-                    m += 1
-                if m >= 4 or len(o) > 3000:
-                    print('start %#x +%d lvl %d -> %5d bytes, match %d, head %s' % (
-                        start, extra, lvl, len(o), m, o[:12].hex(' ')))
+    path = sys.argv[1] if len(sys.argv) > 1 else 'tmp/base.bin'
+    data = open(path, 'rb').read()
+    blocks = find_blocks(data)
+    print('%s: %d bytes, FastLZ blocks at %s' % (path, len(data), [hex(b) for b in blocks]))
+    for b in blocks:
+        dec = decompress_block(data, b)
+        print('  block %#x -> %d bytes, head %s' % (b, len(dec), dec[:16].hex(' ')))
