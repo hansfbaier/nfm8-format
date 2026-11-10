@@ -48,6 +48,9 @@ Two ways to attack the framing, both with real costs:
 * **B. Static analysis of `FM8.exe` / `FM8.dll`.** Fast and definitive, but it is
   disassembly of a proprietary binary — the opposite of the black-box approach
   used so far, and a decision the project owner must make, not me.
+  **Status: approved by the project owner and in progress** — see
+  `analysis/NOTES.md`. Already recovered the complete `DSIN` tag vocabulary and
+  the parameter name pool (5 strings per parameter, module-grouped).
 
 Note that pushes towards (B) or at least complicates (A): the stream contains
 reversed ASCII (`knab`, `tsrpE8MF`, `ctniL`, `siug`) next to normal ASCII
