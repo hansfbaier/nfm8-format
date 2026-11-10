@@ -7,12 +7,15 @@ verification oracle.
 > **Project goal:** a tool that reads *and writes* every synth parameter with **no
 > FM8 installed** — `FM8.dll` used only as a development oracle.
 >
-> **Status:** not there yet. The container, metadata and safe metadata round-trip
-> are fully decoded and verified. The synthesis-parameter stream is only
-> partially decoded: values are LE `float32` with variable significant bytes, but
-> the token framing and the position -> parameter mapping are unknown, so synth
-> parameters cannot yet be written without the plugin. The open problems and a
-> mechanical plan to close them are in [docs/PLAN.md](docs/PLAN.md).
+> **Status:** the format is decoded end to end. The container, the encryption
+> item and the payload codec are all solved, and the codec is bidirectional:
+> every FastLZ block in the library decompresses and re-compresses back to the
+> identical stored bytes (`python tools/check_codec.py <dir>`). The mapping from
+> VST parameter to payload field is measured for all 1094 parameters
+> ([`data/param_schema.json`](data/param_schema.json)) and the value encodings are
+> partly classified ([`data/param_curves.json`](data/param_curves.json)). What is
+> left is finishing the value encodings for every integer field; the plan is in
+> [docs/PLAN.md](docs/PLAN.md).
 
 ## Why this exists
 
