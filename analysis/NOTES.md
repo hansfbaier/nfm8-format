@@ -103,13 +103,86 @@ packed values. It should be settled before any encoder is written.
    pool has no numbers interleaved, so the structs live elsewhere and reference
    the pool by index — search for a table of ~1094 records with small integers.
 
-## Blocker: a macOS build would be much cheaper
+## macOS build: unlocked
 
-NI's download host is not reachable from this machine (`download.native-
-instruments.com` returns no response; the product page rate-limits), so the
-macOS build could not be fetched. NI's macOS binaries are usually far less
-stripped and ship full symbol tables, which would collapse steps 1–3 into
-symbol-name reading. `7z` here can unwrap a `.dmg`.
+With `FM8_146_Mac.dmg` available locally, `7z` unwraps DMG -> HFS+ -> `.pkg`
+(Xar) -> `Payload` (gzip) -> `Payload~` (cpio) -> universal Mach-O:
+
+```
+mac/FM8.component/Contents/MacOS/FM8     40 MB, x86_64 + arm64
+```
+
+`analysis/macho.py` parses fat Mach-O, segments/sections, `LC_SYMTAB`, and can
+disassemble by virtual address. The x86_64 slice has **57,577 symbols** (arm64:
+56,111) — the binary is not stripped at all.
+
+### The class model (from symbols)
+
+```
+FM8Program::write(NI::GP::Stream&)         0x06ccd0   serialiser
+FM8Program::read (NI::GP::Stream&)         0x06e0a0   parser
+FM8EditBuffer::write / read                0x06cc90 / 0x06dfd0
+FM8::write_Instance / read_Instance        0x09cfb0 / 0x09d7e0
+FM8::writeChunkOfType / readChunkOfType    0x09cee0 / 0x09d140
+FM8Stream::readHeader / readSnapBlock      0x086470 / 0x0864f0
+NI::GP::Stream::writeF32 / writeU32 / writeString
+NI::GP::CompressedStorage                  setCompressionMethod, beginBlock,
+                                           finishBlock, readHeader(DataHeaderV2)
+NI::SND::DBSoundFile                       chunk reader/writer, uses the above
+```
+
+Per-module tag enums exist as distinct types, which is the parameter taxonomy:
+`ParameterTags`, `ParameterTagsMorphed`, `OperatorTags`, `OperatorTagsMorphed`,
+`EnvelopeTags`, `KeyScaleTags`, `MatrixTags`, `EasyEditTags`, `RealtimeTags`,
+`eMicrotune`, plus `FM8ParameterInfo` and
+`FM8ParameterIndexTransformation::TagDescription` (the tag <-> index mapping),
+and `FM8Program::GetParameterProperties(long, FM8ParameterInfo&)`.
+
+### Serialisation order is an explicit index list
+
+`FM8::write_Instance` writes `'FM8E'` + `0x2711` + one byte, then repeatedly:
+
+```
+mov rdi,[this+0x5558]        ; parameter accessor object
+mov rax,[rdi]                ; vtable
+mov esi, <index>             ; e.g. 3, 6, 12, 11, ...
+call [rax+0x60]              ; float getParameter(int)
+call NI::GP::Stream::writeF32
+```
+
+So the stream is an ordered sequence of plain **4-byte LE floats**, and the
+order is the literal list of `esi` immediates in that function — i.e. the
+schema order is recoverable by scanning the immediates, not by guessing.
+
+`FM8Program::write` additionally shows a 138-float run read straight from the
+program object (`this+0x50`, stride 4, skipping indices 11 and 12), preceded by
+`'FM8E'`, `0xcf`, `0x23bc` and four strings.
+
+### Consequence for the framing question
+
+`NI::GP::Stream::writeF32` writes a plain 4-byte float (byte-swapped only on a
+big-endian host). Therefore the variable-length "tokens" seen at file level are
+**not** a float encoding: the numeric payload is fixed-width, and the apparent
+tags belong to the storage/compression layer (`NI::GP::CompressedStorage`, whose
+own header magic is `-NI-` / `data`, and which exposes
+`setCompressionMethod(eCompressionMethod)` plus per-block begin/finish).
+
+zlib is the only general-purpose compressor linked, but the preset payload does
+**not** decompress as zlib/raw-deflate/gzip at any offset near its header, and
+the binary contains no LZ4/ZSTD/LZO. Also, the payload visibly contains
+`hsin`/`DSIN` fourccs, which incompressible text would not survive. The working
+hypothesis is therefore that `codec == 2` is a **stored/uncompressed** mode and
+the `[u32][u32][u8]` prefix is a size + method header, with the *first* u32 not
+being an uncompressed length.
+
+### Next steps
+
+1. Scan `FM8::write_Instance` (and `FM8Program::write`) for the full `mov esi,
+   imm` list -> complete ordered schema.
+2. Read `FM8ParameterInfo` / `GetParameterProperties` to get per-parameter
+   min/max/default/scale, which gives the VST 0..1 <-> engine value mapping.
+3. Disassemble `CompressedStorage::readHeader`/`attachCompressionStorage`
+   (`DataHeaderV2`) to settle the `[size][size][codec]` prefix.
 
 ## Reproducing
 
