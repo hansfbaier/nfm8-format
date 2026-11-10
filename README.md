@@ -20,7 +20,19 @@ verification oracle.
 > function in [`data/param_schema.json`](data/param_schema.json); 976 of them
 > reproduce an unseen value exactly. The remaining 44 are integer-valued floats
 > where FM8's rounding and ours disagree by one step, plus 10 discrete fields with
-> no closed form. See [docs/PLAN.md](docs/PLAN.md).
+> no closed form. See [docs/PLAN.md](docs/PLAN.md).  The offsets are relative to
+> the 1.7.14 reference layout; pass `layout=True` to `Patch.get`/`set` for a
+> patch whose variable envelope block shifts the later fields (see
+> [docs/ENVELOPES.md](docs/ENVELOPES.md) §6.1).
+>
+> **Envelopes:** the operator/filter/pitch **breakpoint envelopes** are decoded
+> separately from the VST parameter schema. `fm8param.Patch.envelopes()` and
+> `fm8env.py` read the breakpoint times, levels and slopes for A–F, X, Z and
+> Pitch, plus the `P.Env` / `Env Loop` / `Env Rel` flags. The layout is
+> header-relative and the same grammar works across the 1.7.4, 1.7.8 and 1.7.14
+> factory files tested (1155/1155). See [`docs/ENVELOPES.md`](docs/ENVELOPES.md)
+> for the specification, worked example and validation; the former open handoff
+> is now [`docs/ENVELOPES_HANDOFF.md`](docs/ENVELOPES_HANDOFF.md).
 
 ## Why this exists
 
@@ -81,6 +93,29 @@ python nfm8.py set-author MyPatch.nfm8 "Your Name" -o tagged.nfm8
 python nfm8.py set-name   MyPatch.nfm8 "Deep Clap" -o tagged.nfm8
 python nfm8.py set-meta   MyPatch.nfm8 color 3     -o tagged.nfm8
 python nfm8.py set-meta   MyPatch.nfm8 soundtype 2 -o tagged.nfm8
+```
+
+Read the breakpoint envelopes:
+
+```bash
+python fm8env.py MyPatch.nfm8              # all nine envelopes
+python fm8env.py MyPatch.nfm8 -o A --raw   # one envelope, stored arrays
+python fm8env.py MyPatch.nfm8 --json       # machine-readable
+python tools/check_envelopes.py            # oracle + factory-library validation
+
+# edit a JSON dump and write the values back (same breakpoint counts)
+python fm8env.py MyPatch.nfm8 --json > env.json
+python fm8env.py MyPatch.nfm8 --apply env.json --output edited.nfm8
+```
+
+```python
+import fm8param
+
+p = fm8param.Patch('MyPatch.nfm8')
+for bp in p.envelopes()['A'].breakpoints:
+    print(bp.index, bp.abs_time_s, bp.rel_time_s, bp.level, bp.slope)
+print(p.env_flags()['F'])       # P.Env / Loop / Rel
+print(p.get(178, layout=True))  # schema field after the variable envelope block
 ```
 
 As a library:
@@ -171,10 +206,15 @@ applies to you before redistributing patches made with it.
 
 ```
 nfm8.py              reader/writer + CLI (stdlib only)
+fm8param.py          VST-parameter reader/writer (no plugin at runtime)
+fm8env.py            breakpoint-envelope decoder + CLI
 docs/FORMAT.md        the format write-up, with evidence
+docs/ENVELOPES.md     envelope layout, worked example and validation
+data/envelope_schema.json  machine-readable envelope layout + flag table
 vsthost/vsthost.c     minimal VST2 host used as an oracle
 vsthost/Makefile
 tools/fm8_oracle.py   round-trip verification helper
+tools/check_envelopes.py  envelope decoder validation
 ```
 
 ## Contributing

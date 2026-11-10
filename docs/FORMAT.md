@@ -300,6 +300,32 @@ byte-identical to FM8's output** (GUIDs aside).  Until that passes, the format i
 only partially decoded and `nfm8.py` can safely edit metadata but not synth
 parameters.
 
+### 5.3 Breakpoint envelopes (solved, separate from the parameter stream)
+
+The operator/filter/pitch envelopes are **not** VST parameters and are not part
+of the packed parameter fields above.  They are a separate, header-relative
+section of the `FM8E` payload and are fully decoded; see
+[`ENVELOPES.md`](ENVELOPES.md) for the full specification and validation.
+
+Summary:
+
+* `header_end` is the end of the four length-prefixed metadata strings.
+* 27 flag bytes at `header_end + 1118` (`P.Env`, `Env Loop`, `Env Rel` for
+  A–F, X, Z, Pitch).
+* 27 breakpoint records at `header_end + 1505`; each record is
+  `u8 nseg` + `nseg+1` little-endian `float32` values (full 4-byte floats, no
+  compacting).
+* Three runs of nine records: times, levels, slopes.  Destinations in order:
+  `A, B, C, D, E, F, X, Z, Pitch`.
+* Times are milliseconds: BP1 absolute, then per-segment deltas.  FM8 displays
+  seconds.
+* The same grammar and anchors work for the 1.7.4, 1.7.8 and 1.7.14 factory
+  files tested (1155/1155).  X/Z envelopes can contain uninitialised sentinel
+  time values when unused.
+
+Decode with `python fm8env.py patch.nfm8` or
+`fm8param.Patch(path).envelopes()`.
+
 ## 6. Behaviour worth knowing
 
 * `FM8.dll` **re-encodes** the parameter blob when saving (`effGetChunk`), so a

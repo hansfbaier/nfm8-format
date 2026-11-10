@@ -24,7 +24,11 @@ python tools/compare_states.py authored_params.json from_fm8.bin   # must be 0 d
 * values are LE `float32`, bit-packed with a variable significant-bit count
   (§5.1) — the exact framing is still open;
 * 1094 VST parameters with names; the parameter names are stable text, so the
-  schema can be keyed by name rather than by index.
+  schema can be keyed by name rather than by index;
+* the nine breakpoint envelopes (A–F, X, Z, Pitch), their `P.Env`/`Loop`/`Rel`
+  flags, and their header-relative anchors are decoded — see
+  [`ENVELOPES.md`](ENVELOPES.md). This is separate from the VST parameter
+  schema and does not unblock the framing problem below.
 
 ## Blocker (measured, not assumed)
 

@@ -18,11 +18,19 @@ value to the stored value:
 Everything here was derived by measurement and from the public FastLZ format; no
 vendor code is involved.
 
+Breakpoint envelopes are **not** VST parameters and are not in
+`param_schema.json`; read them with `p.envelopes()` (implemented in `fm8env.py`).
+The schema offsets above are relative to the 1.7.14 reference layout.  A patch
+with a different header length or envelope-section size shifts later fields;
+pass `layout=True` to `get`/`set` to apply the correction.
+
     import fm8param
     p = fm8param.Patch('preset.nfm8')
     print(p.get(200))            # current 0..1 value of parameter 200
     p.set(200, 0.75)
     p.write('out.nfm8')
+    print(p.envelopes()['A'].breakpoints)
+    print(p.get(178, layout=True))
 """
 import json
 import os
@@ -162,18 +170,32 @@ class Patch:
         return found
 
     # -- parameter access ----------------------------------------------------
-    def _field(self, index):
+    def _field(self, index, layout=False):
         meta = self.schema.get(index)
         if meta is None:
             raise KeyError('parameter %d is not in the schema' % index)
-        return meta, self.payload + meta['offset'], field_width(meta)
+        offset = meta['offset']
+        if layout:
+            # The schema offsets were measured on the 1.7.14 reference chunk.
+            # A different header length or envelope-section size shifts every
+            # field after the envelope section; fm8env knows the correction.
+            import fm8env
+            offset = fm8env.schema_offset(self, offset)
+        return meta, self.payload + offset, field_width(meta)
 
-    def get(self, index):
-        meta, off, width = self._field(index)
+    def get(self, index, *, layout=False):
+        """Current 0..1 value of parameter `index`.
+
+        `layout=True` applies the version/envelope-section offset correction
+        (needed for patches whose envelope block differs from the 1.7.14
+        reference).  The default preserves the measured reference offsets.
+        """
+        meta, off, width = self._field(index, layout)
         return decode_value(meta, bytes(self.inner[off:off + width]))
 
-    def set(self, index, value):
-        meta, off, width = self._field(index)
+    def set(self, index, value, *, layout=False):
+        """Set parameter `index` to a 0..1 value; see `get()` for `layout`."""
+        meta, off, width = self._field(index, layout)
         raw = encode_value(meta, value)
         if raw is None:
             raise ValueError('parameter %d is an enum; write its raw value' % index)
@@ -184,6 +206,27 @@ class Patch:
         if meta and meta['model'].startswith('enum'):
             return list(meta['values'])
         return None
+
+    # -- breakpoint envelopes ------------------------------------------------
+    def envelopes(self):
+        """Decode the nine breakpoint envelopes (A-F, X, Z, Pitch).
+
+        Returns a ``{destination: fm8env.Envelope}`` mapping.  Envelope data
+        is not a VST parameter and is not covered by ``param_schema.json``;
+        see docs/ENVELOPES.md.
+        """
+        import fm8env
+        return fm8env.read_envelopes(self)
+
+    def envelope_section(self):
+        """Decode envelopes plus the raw key/velocity-scaling record runs."""
+        import fm8env
+        return fm8env.read_section(self)
+
+    def env_flags(self):
+        """Return the P.Env / Env Loop / Env Rel flags per destination."""
+        import fm8env
+        return fm8env.read_flags(self)
 
     # -- write ---------------------------------------------------------------
     def to_bytes(self):

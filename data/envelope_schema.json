@@ -1,0 +1,998 @@
+{
+  "about": "FM8 breakpoint envelope layout, measured from .nfm8 payloads and checked against the FM8 1.7.14 GUI. Offsets are relative to the end of the four FM8E metadata strings (header_end), so they are version-independent. Measurements only; no Native Instruments code or data.",
+  "payload": {
+    "preamble": "u32 'FM8E' (bytes 45 38 4d 46), u32 0xcf, u32 0x23bc, then four u32-length-prefixed ASCII strings",
+    "header_end": "first byte after the fourth string"
+  },
+  "anchors": {
+    "flags": {
+      "header_relative": 1118,
+      "bytes": 27,
+      "payload_1_7_14": 1174,
+      "payload_1_7_8_Whitty": 1199
+    },
+    "breakpoints": {
+      "header_relative": 1505,
+      "payload_1_7_14": 1561,
+      "payload_1_7_8_Whitty": 1586
+    },
+    "reference_1_7_14": {
+      "header_length": 56,
+      "breakpoint_start_payload_relative": 1561,
+      "envelope_size": 577,
+      "breakpoint_end_payload_relative": 2138,
+      "next_mapped_schema_field": {
+        "param": 178,
+        "offset": 2212
+      }
+    }
+  },
+  "destinations": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "X",
+    "Z",
+    "Pitch"
+  ],
+  "runs": [
+    {
+      "name": "times_ms",
+      "records": 9,
+      "index": 0,
+      "meaning": "BP1 absolute time, then segment deltas, milliseconds"
+    },
+    {
+      "name": "levels",
+      "records": 9,
+      "index": 1,
+      "meaning": "level of each breakpoint, 0..1"
+    },
+    {
+      "name": "slopes",
+      "records": 9,
+      "index": 2,
+      "meaning": "slope of each breakpoint, 0..1"
+    }
+  ],
+  "record": {
+    "count": "u8: number of segments = breakpoints - 1",
+    "values": "count+1 little-endian float32 values",
+    "alignment": "byte aligned; every value is a full 4-byte float (no compacting)",
+    "max_segments_observed": 30
+  },
+  "time_semantics": {
+    "storage_unit": "milliseconds",
+    "abs": "abs[0]=v[0]; abs[i]=abs[i-1]+v[i]",
+    "rel": "rel[0]=v[0]; rel[i]=v[i]",
+    "gui": "FM8 shows seconds, i.e. stored milliseconds / 1000, rounded to 3 decimals",
+    "sentinel_threshold_ms": 1000000,
+    "sentinel_note": "X/Z envelopes are often unused; their time arrays can contain sentinel/uninitialised-looking floats up to ~1e15. Treat values above the threshold (or non-finite) as sentinel, not musical time."
+  },
+  "flags": {
+    "629": {
+      "name": "Op. A P.Env",
+      "destination": "A",
+      "group": "pitch_env",
+      "label": "P.Env",
+      "offset_header_relative": 1118,
+      "offset_payload_1_7_14": 1174,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "630": {
+      "name": "Op. B P.Env",
+      "destination": "B",
+      "group": "pitch_env",
+      "label": "P.Env",
+      "offset_header_relative": 1119,
+      "offset_payload_1_7_14": 1175,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "631": {
+      "name": "Op. C P.Env",
+      "destination": "C",
+      "group": "pitch_env",
+      "label": "P.Env",
+      "offset_header_relative": 1120,
+      "offset_payload_1_7_14": 1176,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "632": {
+      "name": "Op. D P.Env",
+      "destination": "D",
+      "group": "pitch_env",
+      "label": "P.Env",
+      "offset_header_relative": 1121,
+      "offset_payload_1_7_14": 1177,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "633": {
+      "name": "Op. E P.Env",
+      "destination": "E",
+      "group": "pitch_env",
+      "label": "P.Env",
+      "offset_header_relative": 1122,
+      "offset_payload_1_7_14": 1178,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "634": {
+      "name": "Op. F P.Env",
+      "destination": "F",
+      "group": "pitch_env",
+      "label": "P.Env",
+      "offset_header_relative": 1123,
+      "offset_payload_1_7_14": 1179,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "635": {
+      "name": "Op. X P.Env",
+      "destination": "X",
+      "group": "pitch_env",
+      "label": "P.Env",
+      "offset_header_relative": 1124,
+      "offset_payload_1_7_14": 1180,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "636": {
+      "name": "Op. Z P.Env",
+      "destination": "Z",
+      "group": "pitch_env",
+      "label": "P.Env",
+      "offset_header_relative": 1125,
+      "offset_payload_1_7_14": 1181,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "637": {
+      "name": "Pitch P.Env",
+      "destination": "Pitch",
+      "group": "pitch_env",
+      "label": "P.Env",
+      "offset_header_relative": 1126,
+      "offset_payload_1_7_14": 1182,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "638": {
+      "name": "Op. A Env Loop",
+      "destination": "A",
+      "group": "loop",
+      "label": "Env Loop",
+      "offset_header_relative": 1127,
+      "offset_payload_1_7_14": 1183,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "639": {
+      "name": "Op. B Env Loop",
+      "destination": "B",
+      "group": "loop",
+      "label": "Env Loop",
+      "offset_header_relative": 1128,
+      "offset_payload_1_7_14": 1184,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "640": {
+      "name": "Op. C Env Loop",
+      "destination": "C",
+      "group": "loop",
+      "label": "Env Loop",
+      "offset_header_relative": 1129,
+      "offset_payload_1_7_14": 1185,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "641": {
+      "name": "Op. D Env Loop",
+      "destination": "D",
+      "group": "loop",
+      "label": "Env Loop",
+      "offset_header_relative": 1130,
+      "offset_payload_1_7_14": 1186,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "642": {
+      "name": "Op. E Env Loop",
+      "destination": "E",
+      "group": "loop",
+      "label": "Env Loop",
+      "offset_header_relative": 1131,
+      "offset_payload_1_7_14": 1187,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "643": {
+      "name": "Op. F Env Loop",
+      "destination": "F",
+      "group": "loop",
+      "label": "Env Loop",
+      "offset_header_relative": 1132,
+      "offset_payload_1_7_14": 1188,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "644": {
+      "name": "Op. X Env Loop",
+      "destination": "X",
+      "group": "loop",
+      "label": "Env Loop",
+      "offset_header_relative": 1133,
+      "offset_payload_1_7_14": 1189,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "645": {
+      "name": "Op. Z Env Loop",
+      "destination": "Z",
+      "group": "loop",
+      "label": "Env Loop",
+      "offset_header_relative": 1134,
+      "offset_payload_1_7_14": 1190,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "646": {
+      "name": "Pitch Env Loop",
+      "destination": "Pitch",
+      "group": "loop",
+      "label": "Env Loop",
+      "offset_header_relative": 1135,
+      "offset_payload_1_7_14": 1191,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "647": {
+      "name": "Op. A Env Rel",
+      "destination": "A",
+      "group": "release",
+      "label": "Env Rel",
+      "offset_header_relative": 1136,
+      "offset_payload_1_7_14": 1192,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "648": {
+      "name": "Op. B Env Rel",
+      "destination": "B",
+      "group": "release",
+      "label": "Env Rel",
+      "offset_header_relative": 1137,
+      "offset_payload_1_7_14": 1193,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "649": {
+      "name": "Op. C Env Rel",
+      "destination": "C",
+      "group": "release",
+      "label": "Env Rel",
+      "offset_header_relative": 1138,
+      "offset_payload_1_7_14": 1194,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "650": {
+      "name": "Op. D Env Rel",
+      "destination": "D",
+      "group": "release",
+      "label": "Env Rel",
+      "offset_header_relative": 1139,
+      "offset_payload_1_7_14": 1195,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "651": {
+      "name": "Op. E Env Rel",
+      "destination": "E",
+      "group": "release",
+      "label": "Env Rel",
+      "offset_header_relative": 1140,
+      "offset_payload_1_7_14": 1196,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "652": {
+      "name": "Op. F Env Rel",
+      "destination": "F",
+      "group": "release",
+      "label": "Env Rel",
+      "offset_header_relative": 1141,
+      "offset_payload_1_7_14": 1197,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "653": {
+      "name": "Op. X Env Rel",
+      "destination": "X",
+      "group": "release",
+      "label": "Env Rel",
+      "offset_header_relative": 1142,
+      "offset_payload_1_7_14": 1198,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "654": {
+      "name": "Op. Z Env Rel",
+      "destination": "Z",
+      "group": "release",
+      "label": "Env Rel",
+      "offset_header_relative": 1143,
+      "offset_payload_1_7_14": 1199,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    },
+    "655": {
+      "name": "Pitch Env Rel",
+      "destination": "Pitch",
+      "group": "release",
+      "label": "Env Rel",
+      "offset_header_relative": 1144,
+      "offset_payload_1_7_14": 1200,
+      "model": "u8_bool",
+      "values": [
+        0,
+        1
+      ]
+    }
+  },
+  "post_breakpoint_runs": {
+    "scaling_a": {
+      "records": 9,
+      "grammar": "same [u8 n][f32 x (n+1)] record",
+      "observed": "values 0..127; probably key/velocity positions"
+    },
+    "scaling_b": {
+      "records": 9,
+      "grammar": "same record",
+      "observed": "values typically -80..0 or 0..1; semantics not fully verified"
+    },
+    "after_scaling": "the next byte starts the following parameter section, not envelope data"
+  },
+  "validation": {
+    "factory_patches_scanned": 1155,
+    "breakpoint_runs_valid": 1155,
+    "envelopes_without_sentinel_times": 1084,
+    "envelopes_with_sentinel_times": 71,
+    "files_with_extreme_uninitialised_times": 3,
+    "flag_arrays_valid": 1155,
+    "note": "The 71 sentinel cases are almost all unused X/Z envelopes. 3 files contain sentinel/uninitialised-looking X/Z floats above 1e12 (up to ~2.4e15); they parse once sentinel values are allowed and must not be interpreted as musical time.",
+    "reproduce": "python tools/check_envelopes.py",
+    "envelope_size_min": 521,
+    "envelope_size_max": 2725,
+    "writer_oracle": "OK: A BP1 time, BP2 level, BP3 slope and F P.Env flag survive effSetChunk"
+  },
+  "gui_oracle_Whitty_Lead": {
+    "A": {
+      "destination": "A",
+      "flags": {
+        "pitch_env": true,
+        "loop": true,
+        "release": true
+      },
+      "raw_flag_bytes": {
+        "pitch_env": 1,
+        "loop": 1,
+        "release": 1
+      },
+      "has_sentinel": false,
+      "breakpoints": [
+        {
+          "index": 1,
+          "abs_time_s": 0.001,
+          "rel_time_s": 0.001,
+          "level": 1.0,
+          "slope": 0.24700000882148743
+        },
+        {
+          "index": 2,
+          "abs_time_s": 0.11400007629394532,
+          "rel_time_s": 0.11300007629394532,
+          "level": 0.6490000486373901,
+          "slope": 0.5280000567436218
+        },
+        {
+          "index": 3,
+          "abs_time_s": 0.21400007629394532,
+          "rel_time_s": 0.1,
+          "level": 0.6490000486373901,
+          "slope": 0.5
+        },
+        {
+          "index": 4,
+          "abs_time_s": 0.25400011825561525,
+          "rel_time_s": 0.040000041961669924,
+          "level": 9.999999960041972e-13,
+          "slope": 0.9170001149177551
+        }
+      ],
+      "raw": {
+        "time_values_ms": [
+          1.0,
+          113.00007629394531,
+          100.0,
+          40.00004196166992
+        ],
+        "levels": [
+          1.0,
+          0.6490000486373901,
+          0.6490000486373901,
+          9.999999960041972e-13
+        ],
+        "slopes": [
+          0.24700000882148743,
+          0.5280000567436218,
+          0.5,
+          0.9170001149177551
+        ]
+      }
+    },
+    "B": {
+      "destination": "B",
+      "flags": {
+        "pitch_env": true,
+        "loop": true,
+        "release": true
+      },
+      "raw_flag_bytes": {
+        "pitch_env": 1,
+        "loop": 1,
+        "release": 1
+      },
+      "has_sentinel": false,
+      "breakpoints": [
+        {
+          "index": 1,
+          "abs_time_s": 0.001,
+          "rel_time_s": 0.001,
+          "level": 1.0,
+          "slope": 0.24700000882148743
+        },
+        {
+          "index": 2,
+          "abs_time_s": 0.101,
+          "rel_time_s": 0.1,
+          "level": 1.0,
+          "slope": 0.5
+        },
+        {
+          "index": 3,
+          "abs_time_s": 0.14100004196166993,
+          "rel_time_s": 0.040000041961669924,
+          "level": 9.999999960041972e-13,
+          "slope": 0.9170001149177551
+        }
+      ],
+      "raw": {
+        "time_values_ms": [
+          1.0,
+          100.0,
+          40.00004196166992
+        ],
+        "levels": [
+          1.0,
+          1.0,
+          9.999999960041972e-13
+        ],
+        "slopes": [
+          0.24700000882148743,
+          0.5,
+          0.9170001149177551
+        ]
+      }
+    },
+    "C": {
+      "destination": "C",
+      "flags": {
+        "pitch_env": true,
+        "loop": true,
+        "release": true
+      },
+      "raw_flag_bytes": {
+        "pitch_env": 1,
+        "loop": 1,
+        "release": 1
+      },
+      "has_sentinel": false,
+      "breakpoints": [
+        {
+          "index": 1,
+          "abs_time_s": 0.001,
+          "rel_time_s": 0.001,
+          "level": 1.0,
+          "slope": 0.24700000882148743
+        },
+        {
+          "index": 2,
+          "abs_time_s": 0.101,
+          "rel_time_s": 0.1,
+          "level": 1.0,
+          "slope": 0.5
+        },
+        {
+          "index": 3,
+          "abs_time_s": 0.14100004196166993,
+          "rel_time_s": 0.040000041961669924,
+          "level": 9.999999960041972e-13,
+          "slope": 0.9170001149177551
+        }
+      ],
+      "raw": {
+        "time_values_ms": [
+          1.0,
+          100.0,
+          40.00004196166992
+        ],
+        "levels": [
+          1.0,
+          1.0,
+          9.999999960041972e-13
+        ],
+        "slopes": [
+          0.24700000882148743,
+          0.5,
+          0.9170001149177551
+        ]
+      }
+    },
+    "D": {
+      "destination": "D",
+      "flags": {
+        "pitch_env": true,
+        "loop": true,
+        "release": true
+      },
+      "raw_flag_bytes": {
+        "pitch_env": 1,
+        "loop": 1,
+        "release": 1
+      },
+      "has_sentinel": false,
+      "breakpoints": [
+        {
+          "index": 1,
+          "abs_time_s": 0.001,
+          "rel_time_s": 0.001,
+          "level": 1.0,
+          "slope": 0.24700000882148743
+        },
+        {
+          "index": 2,
+          "abs_time_s": 0.101,
+          "rel_time_s": 0.1,
+          "level": 1.0,
+          "slope": 0.5
+        },
+        {
+          "index": 3,
+          "abs_time_s": 0.14100004196166993,
+          "rel_time_s": 0.040000041961669924,
+          "level": 9.999999960041972e-13,
+          "slope": 0.9170001149177551
+        }
+      ],
+      "raw": {
+        "time_values_ms": [
+          1.0,
+          100.0,
+          40.00004196166992
+        ],
+        "levels": [
+          1.0,
+          1.0,
+          9.999999960041972e-13
+        ],
+        "slopes": [
+          0.24700000882148743,
+          0.5,
+          0.9170001149177551
+        ]
+      }
+    },
+    "E": {
+      "destination": "E",
+      "flags": {
+        "pitch_env": true,
+        "loop": true,
+        "release": true
+      },
+      "raw_flag_bytes": {
+        "pitch_env": 1,
+        "loop": 1,
+        "release": 1
+      },
+      "has_sentinel": false,
+      "breakpoints": [
+        {
+          "index": 1,
+          "abs_time_s": 0.001,
+          "rel_time_s": 0.001,
+          "level": 1.0,
+          "slope": 0.22700002789497375
+        },
+        {
+          "index": 2,
+          "abs_time_s": 0.101,
+          "rel_time_s": 0.1,
+          "level": 1.0,
+          "slope": 0.5
+        },
+        {
+          "index": 3,
+          "abs_time_s": 0.14100004196166993,
+          "rel_time_s": 0.040000041961669924,
+          "level": 9.999999960041972e-13,
+          "slope": 0.9170001149177551
+        }
+      ],
+      "raw": {
+        "time_values_ms": [
+          1.0,
+          100.0,
+          40.00004196166992
+        ],
+        "levels": [
+          1.0,
+          1.0,
+          9.999999960041972e-13
+        ],
+        "slopes": [
+          0.22700002789497375,
+          0.5,
+          0.9170001149177551
+        ]
+      }
+    },
+    "F": {
+      "destination": "F",
+      "flags": {
+        "pitch_env": true,
+        "loop": true,
+        "release": true
+      },
+      "raw_flag_bytes": {
+        "pitch_env": 1,
+        "loop": 1,
+        "release": 1
+      },
+      "has_sentinel": false,
+      "breakpoints": [
+        {
+          "index": 1,
+          "abs_time_s": 0.001,
+          "rel_time_s": 0.001,
+          "level": 1.0,
+          "slope": 0.24700000882148743
+        },
+        {
+          "index": 2,
+          "abs_time_s": 0.101,
+          "rel_time_s": 0.1,
+          "level": 1.0,
+          "slope": 0.5
+        },
+        {
+          "index": 3,
+          "abs_time_s": 0.105,
+          "rel_time_s": 0.004,
+          "level": 9.999999960041972e-13,
+          "slope": 0.9170001149177551
+        }
+      ],
+      "raw": {
+        "time_values_ms": [
+          1.0,
+          100.0,
+          4.0
+        ],
+        "levels": [
+          1.0,
+          1.0,
+          9.999999960041972e-13
+        ],
+        "slopes": [
+          0.24700000882148743,
+          0.5,
+          0.9170001149177551
+        ]
+      }
+    },
+    "X": {
+      "destination": "X",
+      "flags": {
+        "pitch_env": true,
+        "loop": true,
+        "release": true
+      },
+      "raw_flag_bytes": {
+        "pitch_env": 1,
+        "loop": 1,
+        "release": 1
+      },
+      "has_sentinel": false,
+      "breakpoints": [
+        {
+          "index": 1,
+          "abs_time_s": 0.001,
+          "rel_time_s": 0.001,
+          "level": 1.0,
+          "slope": 0.5
+        },
+        {
+          "index": 2,
+          "abs_time_s": 0.501,
+          "rel_time_s": 0.5,
+          "level": 1.0,
+          "slope": 0.8999999761581421
+        },
+        {
+          "index": 3,
+          "abs_time_s": 0.502,
+          "rel_time_s": 0.001,
+          "level": 9.999999960041972e-13,
+          "slope": 0.8999999761581421
+        }
+      ],
+      "raw": {
+        "time_values_ms": [
+          1.0,
+          500.0,
+          1.0
+        ],
+        "levels": [
+          1.0,
+          1.0,
+          9.999999960041972e-13
+        ],
+        "slopes": [
+          0.5,
+          0.8999999761581421,
+          0.8999999761581421
+        ]
+      }
+    },
+    "Z": {
+      "destination": "Z",
+      "flags": {
+        "pitch_env": true,
+        "loop": true,
+        "release": true
+      },
+      "raw_flag_bytes": {
+        "pitch_env": 1,
+        "loop": 1,
+        "release": 1
+      },
+      "has_sentinel": false,
+      "breakpoints": [
+        {
+          "index": 1,
+          "abs_time_s": 0.001,
+          "rel_time_s": 0.001,
+          "level": 1.0,
+          "slope": 0.5
+        },
+        {
+          "index": 2,
+          "abs_time_s": 0.501,
+          "rel_time_s": 0.5,
+          "level": 1.0,
+          "slope": 0.8999999761581421
+        },
+        {
+          "index": 3,
+          "abs_time_s": 0.502,
+          "rel_time_s": 0.001,
+          "level": 9.999999960041972e-13,
+          "slope": 0.8999999761581421
+        }
+      ],
+      "raw": {
+        "time_values_ms": [
+          1.0,
+          500.0,
+          1.0
+        ],
+        "levels": [
+          1.0,
+          1.0,
+          9.999999960041972e-13
+        ],
+        "slopes": [
+          0.5,
+          0.8999999761581421,
+          0.8999999761581421
+        ]
+      }
+    },
+    "Pitch": {
+      "destination": "Pitch",
+      "flags": {
+        "pitch_env": true,
+        "loop": true,
+        "release": true
+      },
+      "raw_flag_bytes": {
+        "pitch_env": 1,
+        "loop": 1,
+        "release": 1
+      },
+      "has_sentinel": false,
+      "breakpoints": [
+        {
+          "index": 1,
+          "abs_time_s": 0.001,
+          "rel_time_s": 0.001,
+          "level": 0.0,
+          "slope": 0.5
+        },
+        {
+          "index": 2,
+          "abs_time_s": 0.002,
+          "rel_time_s": 0.001,
+          "level": 0.0,
+          "slope": 0.5
+        },
+        {
+          "index": 3,
+          "abs_time_s": 0.102,
+          "rel_time_s": 0.1,
+          "level": 0.0,
+          "slope": 0.5
+        },
+        {
+          "index": 4,
+          "abs_time_s": 0.103,
+          "rel_time_s": 0.001,
+          "level": 0.0,
+          "slope": 0.5
+        }
+      ],
+      "raw": {
+        "time_values_ms": [
+          1.0,
+          1.0,
+          100.0,
+          1.0
+        ],
+        "levels": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "slopes": [
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ]
+      }
+    }
+  },
+  "corrections_to_handoff": {
+    "A_BP2": "clean file has AbsT 0.114 s, RelT 0.113 s, Level 0.649, Slope 0.528. The earlier 0.113/0.112/0.653 was read after an exploratory drag.",
+    "A_BP3": "0.214 / 0.100 / 0.649 / 0.500 (confirmed).",
+    "F_release": "4 ms (stored delta 4.0), confirmed.",
+    "C": "C is identical to B/D/E in this patch (times 1,100,40; levels 1,1,0; slopes 0.247,0.5,0.917).",
+    "E": "E differs from B/C/D/F only in BP1 slope: 0.227 instead of 0.247."
+  },
+  "parameter_offset_effect": {
+    "formula": "shift_before = header_length - 56; shift_after = (header_length - 56) + (envelope_size - 577)",
+    "reference_header_length": 56,
+    "reference_envelope_size": 577,
+    "Whitty_Lead": {
+      "header_length": 81,
+      "envelope_size": 601,
+      "shift_after": 49,
+      "note": "explains the empirical +49; fields before the envelope section shift by +25"
+    },
+    "helper": "fm8env.schema_offset(patch, offset)",
+    "caveat": "envelope_size ranges 521..2725 bytes across the 1155-patch corpus, so fixed schema offsets are only exact for the reference layout"
+  },
+  "writing": {
+    "same_size": {
+      "api": "fm8env.write_envelopes(patch, {dest: Envelope|dict})",
+      "flags": "fm8env.write_flags(patch, {dest: {group: bool}})",
+      "validated": "yes, through FM8 effSetChunk on the 1.7.14 template tmp/base.bin"
+    },
+    "json_apply": {
+      "dump": "python fm8env.py patch.nfm8 --json > env.json",
+      "apply": "python fm8env.py patch.nfm8 --apply env.json --output edited.nfm8"
+    },
+    "resize": {
+      "api": "fm8env.write_envelopes(..., resize=True)",
+      "status": "experimental",
+      "observation": "FM8 1.7.14 effSetChunk reverted resized envelopes to the default 3-point shape in grow and shrink tests; the resized file decodes correctly but the missing FM8 constraint is unidentified."
+    }
+  }
+}

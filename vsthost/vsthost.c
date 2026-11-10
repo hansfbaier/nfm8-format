@@ -2,7 +2,8 @@
  * Usage: vsthost.exe <dll> <command> [args]
  * Commands:
  *   chunk <out.bin>                        - dump current plugin state chunk
- *   setchunk <in.bin> <out.bin>            - load chunk, dump it back
+ *   setchunk <in.bin> <out.bin>            - load bank chunk, dump it back
+ *   setchunkp <in.bin> <out.bin>           - load program chunk, dump it back
  *   param <index> <value> <out.bin>        - set param, dump chunk
  *   params [maxIndex]                      - print numParams and names
  *   preset <index> <out.bin>               - select preset (if program-based), dump chunk
@@ -228,6 +229,18 @@ int main(int argc, char **argv)
         printf("effSetChunk -> %ld\n", (long)r);
         void *buf = NULL; intptr_t len = 0;
         len = fx->dispatcher(fx, effGetChunk, 0, 0, &buf, 0);
+        if (len > 0) saveFile(argv[4], buf, len);
+    } else if (!strcmp(cmd, "setchunkp") && argc >= 5) {
+        /* Load with the VST "program" flag (index 1) and dump with index 1.
+         * Kept as an experiment: FM8 accepts either flag for chunks it wrote
+         * itself, but foreign/1.7.8 chunks still fall back to the default
+         * state.  The validated writer oracle uses setchunk (index 0). */
+        void *in; size_t n;
+        if (loadFile(argv[3], &in, &n)) return 1;
+        intptr_t r = fx->dispatcher(fx, effSetChunk, 1, (intptr_t)n, in, 0);
+        printf("effSetChunk(program) -> %ld\n", (long)r);
+        void *buf = NULL; intptr_t len = 0;
+        len = fx->dispatcher(fx, effGetChunk, 1, 0, &buf, 0);
         if (len > 0) saveFile(argv[4], buf, len);
     } else if (!strcmp(cmd, "param") && argc >= 6) {
         int idx = atoi(argv[3]);
