@@ -753,3 +753,38 @@ The 104 enums are genuine discrete parameters (switches, selectors, and the
 stored as measured value tables.
 
 Results in [`../data/param_schema.json`](../data/param_schema.json).
+
+
+---
+
+# Parameter writer (fm8param.py)
+
+`fm8param.Patch` reads a preset, exposes `get(index)` / `set(index, value)` for
+every VST parameter covered by the schema, and writes the file back.
+
+Write path:
+
+1. find the FastLZ record and decode the inner tree;
+2. patch the field bytes at `payload + schema[index].offset`;
+3. re-compress with the exact FM8-compatible encoder;
+4. splice the new record in and fix up every *outer* length field whose span
+   encloses it.
+
+Only tags outside the compressed payload are treated as nodes when collecting
+length fields. The stream is full of byte sequences that look like `hsin`/`DSIN`
+headers, and patching those corrupts unrelated words - an early version did
+exactly that and produced files with absurd sizes.
+
+## End-to-end verification
+
+`set(200, 0.9)` on the default chunk, written to a file, then loaded by FM8 itself
+through `effSetChunk`:
+
+    effSetChunk -> 1823          (accepted, our length preserved)
+    plugin readback param 200 = 0.9
+    payload we wrote vs payload FM8 returned: 3825 bytes, 0 differing
+    inner tree differs only at 0x18 and 0x6c - the two 16-byte UUIDs FM8
+    regenerates on every save
+
+So the parameter value survives a real round trip through the plugin, and the
+payload comes back bit-identical.
