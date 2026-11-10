@@ -199,3 +199,95 @@ being an uncompressed length.
 pip install pefile capstone
 python analysis/pe.py
 ```
+
+
+---
+
+# Container layer, recovered from code (macOS 1.4.6 symbols)
+
+The `hsin`/`DSIN` fourccs are the `NI::SOUND::Item` tree. Writers give exact
+field order, so the container no longer needs guessing.
+
+## Item header (writer: `NI::SOUND::ItemHeaderWriter`, 0x2b2be0)
+
+```
+u64  size            ; placeholder 0, patched later by StreamSizePatcher
+u32  1
+u32  'hsin'          ; 0x6e697368
+u32  1
+u32  0
+u8[16] ItemUuid      ; new random uuid per save (ni::commons::fastRandomUuid)
+```
+`ItemFactory::createItem(1, 'DSIN')` allocates the root and calls
+`fastRandomUuid`, which is why every save regenerates GUIDs.
+
+## Item node (writer: `NI::SOUND::Item::writeItem`, 0x2b4040)
+
+```
+u64  size            ; patched afterwards
+u32  'DSIN'          ; 0x4e495344, and Item::getDomainID returns exactly this
+u32  itemID          ; one ASCII char: 1, 'e'(101), 'j'(106), 'l'(108),
+                     ;                  's'(115), 't'(116), 'v'(118), 'y'(121)
+```
+`AppSpecific::writeItem` (0x2c81a0) is the model for a leaf:
+
+```
+u64 0
+u32 'DSIN'
+u32 0x75                 ; itemID 117
+u32 1
+    SubtreeItem::writeItem(...)          ; children
+u32 1
+u32 [this+0x98]
+wstring(toString(VersionNumber at this+0x9c))   ; the @verl value
+```
+
+The `\@verl 1.7.x` metadata is therefore a **wide string written by the item
+itself**, which is why the chunk length changes between FM8 versions.
+
+## The `[u32][u32][u8]` header is real, and it is a size pair
+
+Measured on a live chunk (`effGetChunk`), last `hsin` at 0x421:
+
+| variant | file len | field A | field B | field C |
+|---|---|---|---|---|
+| default patch | 1812 | 4029 | 753 | 2 |
+| param 0 = 0.25 | 1818 | 4029 | 759 | 2 |
+| param 0 = 0.5 | 1812 | 4029 | 753 | 2 |
+| param 0 = 1.0 | 1816 | 4029 | 757 | 2 |
+| 6 factory patches | 1811-1812 | 4029 | ~753 | 2 |
+
+`A = 4029` is constant across patches, `B` tracks the encoded payload length
+(`len(file) - 0x421 - 2`), `C = 2` is a format version. So the preset body is a
+**default snapshot plus a sparse override list**: A is the size of the full
+default program, B the size of the overrides actually stored.
+
+Field B grows by 6 when param 0 goes to 0.25 and by 4 at 1.0, so single
+parameters add whole records; the encoding is variable-length.
+
+## What it is *not*
+
+* Not zlib. `NI::GP::ZLibStorage` exists, but scanning every offset 0x300-0x700
+  of a real chunk with wbits -15/15/31 yields nothing > 200 bytes.
+* Not `NI::GP::CompressedStorage` either: `setCompressionMethod` has exactly two
+  callers, both in `NI::SND::Instrument::doExport/doImportProgramList`, and
+  `CompressedStream::initStorage` has one caller in
+  `CompressedMemoryStream::init`, which nothing calls. The preset path never
+  builds a compressed stream.
+* Not `FM8Stream` (0x86470): that reader wants a 5-byte magic `3a 01 01 00 00`
+  or `3a 02 02 00 00`, which no `.nfm8` contains. It is the FM7/SysEx reader.
+* Not `FM8Program::write` output: that one starts `'FM8E'`, `0xcf`, `0x23bc`
+  and emits plain 4-byte floats, and no `'FM8E'` appears in a `.nfm8` chunk.
+
+## Byte-level diff caveat
+
+Diffs between two saves are dominated by 16-byte UUID regions, not by parameter
+data. Every `40 23 e0 03 53 10`-style marker is followed by a fresh uuid, so the
+markers are item boundaries, not value prefixes. Any diff-based analysis has to
+mask these first — the earlier "first-diff offset" table is therefore UUID noise.
+
+## Remaining unknown
+
+The override record encoding inside the last `hsin` (B bytes). Everything else in
+the file is now accounted for. Next: walk that block as the sparse table it must
+be (param index + packed value), using the default snapshot as the base.
