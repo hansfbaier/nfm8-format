@@ -491,3 +491,73 @@ zero runs), not from a general purpose compressor.
 
 That reframes the last open question: it is the item tree's *value packing*, the
 same format the hsin/DSIN nodes already show, not a standalone codec.
+
+
+---
+
+# The item types, and the codec
+
+## Complete item roster
+
+Recovered by scanning for `getItemID` accessors
+(`55 48 89 e5 b8 <id> 00 00 00 5d c3`) and reading the owning symbol:
+
+| id | char | class | | id | char | class |
+|---|---|---|---|---|---|---|
+| 100 | d | Bank | | 112 | p | AudioSampleItem |
+| 101 | e | Preset | | 113 | q | InternalResourceReferenceItem |
+| 102 | f | BankContainer | | 114 | r | PictureItem |
+| 103 | g | PresetContainer | | 115 | s | SubtreeItem |
+| 104 | h | BinaryChunkItem | | 116 | t | **EncryptionItem** |
+| 106 | j | Authorization | | 117 | u | AppSpecific |
+| 108 | l | SoundInfoItem | | 118 | v | RepositoryRoot |
+| 109 | m | PresetChunkItem | | 120 | x | AutomationParameters |
+| 110 | n | ExternalFileReference | | 121 | y | ControllerAssignments |
+| 111 | o | Resources | | 122 | z | Module |
+| | | | | 123 | { | ModuleBank |
+
+Domain id for all of them is `0x4e495344` = `'DSIN'`.
+
+The `.nfm8` I dumped uses: `e`(Preset), `j`(Authorization), `l`(SoundInfoItem),
+`s`(SubtreeItem), `t`(EncryptionItem), `v`(RepositoryRoot),
+`y`(ControllerAssignments).
+
+## EncryptionItem is compress + XOR
+
+```
+EncryptionItem::setUseCompression(bool)      0x2cc880
+EncryptionItem::compressData(void*,uint,void*)      0x2cccc0
+    -> NI::SOUND::fastlz_compress(src, len, dst)     0x30c850
+    -> if (this+0x98 && key at this+0xa0) XOR the result
+EncryptionItem::decompressData(void*,uint,void*,uint) 0x2cce90
+    -> XOR with the 32-byte key at this+0xa0
+    -> fastlz decompress
+NI::SOUND::fastlz_compress / fastlz_decompress       0x30c850 / 0x30d330
+    -> fastlz1_compress 0x30c870, fastlz2_compress 0x30cd00
+```
+
+The XOR loop is SIMD and uses a **32-byte repeating key**:
+
+```
+esi = (pos - 32) & 0xffc0
+xmm0 = key[esi..+16]; xmm1 = key[esi+16..+32]
+dst[pos-32..] ^= xmm0; dst[pos-16..] ^= xmm1
+esi = pos & 0xffe0
+xmm0 = key[esi..+16]; xmm1 = key[esi+16..+32]
+dst[pos..] ^= xmm0; dst[pos+16..] ^= xmm1
+```
+
+`fastlz_decompress` picks the level from the first byte: `src[0] >> 5` must be
+0 (level 1) or 1 (level 2), anything else is an error.
+
+## Status of the .nfm8 payload
+
+The 753-byte region at 0x417 cannot be a bare FastLZ stream: its first byte is
+0xbd, whose `>>5` is 5. A scan of **every** offset in a real chunk for a valid
+FastLZ header (first byte < 0x40) with `fastlz1/2` decode found no stream that
+starts with the known decompressed image, and no zlib either. So the payload is
+either XOR-masked and then FastLZ'd, or this chunk does not route through
+`EncryptionItem` compression at all.
+
+`analysis/fastlz.py` implements both levels from the published format so the
+tool can stay binary-free once the mask question is settled.
