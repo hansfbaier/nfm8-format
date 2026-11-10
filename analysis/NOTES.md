@@ -74,6 +74,24 @@ Two important consequences:
 Three sites in a chunk carry a regenerated id (`docs/FORMAT.md` §3): after
 `hsin`+12, after `hsin`+9, and after the marker `40 23 e0 03 53 10`+6.
 
+### 4. Negative results that narrow the framing question
+
+Worth recording because they rule out the model I had favoured:
+
+* The node-header writer (`RVA 0x40a180`) has only **2 direct call sites**, both
+  in one function, so most node writes go through other entry points or are
+  inlined — a single-hook approach will not find the serializer.
+* No vtable/pointer reference to that writer exists in the image (the only
+  RVA32 hit is `.pdata` unwind data), so it is not a virtual method.
+* **The candidate tag bytes are not byte-dispatched.** Scanning `.text` for
+  `cmp al, imm8` / `cmp r8, imm8` with the observed tags (`0x40, 0xc0, 0xe0,
+  0x03, 0x04, 0x0b`) finds 560 comparisons but **no 96-byte window containing
+  three distinct tag comparisons** — i.e. there is no `switch` over these bytes.
+
+That last point is evidence *against* "tag byte + payload" and *for* a
+bit-packed encoding, where `0x40`/`0xc0`/`0xe0` are merely the top bits of
+packed values. It should be settled before any encoder is written.
+
 ## Next steps (in order)
 
 1. **Enumerate the writer API.** `0x40a180` is the node-header writer; find its
