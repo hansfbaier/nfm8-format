@@ -14,7 +14,7 @@ Token format:
         length = (ctrl >> 5) - 1
         offset = (ctrl & 31) << 8
         if length == 6: length += src[ip++]
-        ref = len(out) - offset - src[ip++]          # no +1 bias
+        ref = len(out) - offset - src[ip++] - 1     # distance is biased by 1
         length += 3
     else:
         copy (ctrl + 1) literal bytes
@@ -44,14 +44,17 @@ def decompress(src, level=None, maxout=1 << 24):
                 ip += 1
             if ip >= n:
                 break
-            ref = len(out) - offset - src[ip]
+            ref = len(out) - offset - src[ip] - 1
             ip += 1
             length += 3
             if ref < 0:
                 return None
-            for _ in range(length):
-                out.append(out[ref])
-                ref += 1
+            try:
+                for _ in range(length):
+                    out.append(out[ref])
+                    ref += 1
+            except IndexError:
+                return None
         else:
             length = ctrl + 1
             out += src[ip:ip + length]
@@ -83,7 +86,8 @@ def find_blocks(buf, min_size=64):
             continue
         if (buf[i + 8] >> 5) != 0:
             continue
-        if decompress(buf[i + 8:i + 8 + comp], 1, plain + 64) is not None:
+        dec = decompress(buf[i + 8:i + 8 + comp], 1, plain + 64)
+        if dec is not None and len(dec) == plain:
             out.append(i)
     return out
 
