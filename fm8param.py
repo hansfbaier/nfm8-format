@@ -83,11 +83,16 @@ def decode_value(meta, raw):
     elif model.startswith('u'):
         x = int.from_bytes(raw, 'little')
         mod = meta.get('mod', 256)
-        # undo a modular wrap so the value reads as continuous
-        while x - meta['a'] > mod / 2:
-            x -= mod
-        while x - meta['a'] < -mod / 2:
-            x += mod
+        # A signed field wraps: bring the stored value into [a, a + mod) so the
+        # affine inverse is continuous.  Step forward, never back, because the
+        # field is stored modulo the width.
+        a0 = meta['a']
+        if b > 0:
+            while x < a0:
+                x += mod
+        else:
+            while x > a0:
+                x -= mod
     else:
         return None
     return (x - meta['a']) / b
