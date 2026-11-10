@@ -154,6 +154,15 @@ So the stream is an ordered sequence of plain **4-byte LE floats**, and the
 order is the literal list of `esi` immediates in that function — i.e. the
 schema order is recoverable by scanning the immediates, not by guessing.
 
+Scanning `write_Instance` yields only four indices (`3, 6, 12, 11`); the bulk of
+the data is written by a loop over a child container at `[this+0x5568]`. So the
+ordering has to be harvested per writer function, not from one list:
+
+* `write_Instance`  -> `3, 6, 12, 11`, then loops over the child container
+* `FM8Program::write` -> `'FM8E'`, `0xcf`, `0x23bc`, 4 strings, then a
+  straight 138-float run from `this+0x50` (stride 4, skipping indices 11, 12),
+  then further blocks at other offsets
+
 `FM8Program::write` additionally shows a 138-float run read straight from the
 program object (`this+0x50`, stride 4, skipping indices 11 and 12), preceded by
 `'FM8E'`, `0xcf`, `0x23bc` and four strings.
