@@ -398,3 +398,71 @@ path, and single-step the encoder with the 3172-byte plaintext as a known input.
 Because the plaintext is now fully known, the codec can also be derived offline
 by aligning the two byte streams — either way the remaining unknown is a single
 function.
+
+
+---
+
+# The codec pair, captured live
+
+Tracing `effSetChunk` with gdb gives the decompressed image of the chunk, which
+is the missing half of the codec:
+
+```
+break *(g_fm8_base + 0xf8c40)      # readChunkOfType
+# rdx = stream, [rdx+8] = storage, [storage+0x20] = buffer, [storage+0x28] = len
+```
+
+Decompressed block, 3825 bytes, for the default patch:
+
+```
+05 00 00 00           version
+63 0c 00 00           3171 = the FM8Program::write payload length
+00 00 00 00
+74 73 72 70           'tsrp'  (reversed 'prst')
+45 38 4d 46           'E8MF'  (reversed 'FM8E')
+cf 00 00 00  bc 23 00 00  07 00 00 00  'default' ...
+```
+
+The 3171 byte count matches the `writeRaw` size measured in the writer path
+exactly, so the decompressed image is the chunk container itself:
+
+```
+u32 version, u32 payloadLen, u32 0, 'tsrp', 'E8MF', <FM8Program::write payload>
+```
+
+The compressed form in the same file is `file[0x417 : 0x417+753]`; the header
+just before it is `[4029][753][2]`, so `4029` is the uncompressed capacity and
+`753` the stored length.
+
+## Token observations from the alignment (753 -> 3825)
+
+Using difflib on the two byte strings, the encoder emits literals verbatim and
+intersperses tokens. Measured token -> expansion examples:
+
+| token bytes in the compressed stream | expansion |
+|---|---|
+| `20 0b 04` | 3 zero bytes |
+| `20 07 06` | 3 zero bytes |
+| `20 0f` | 2 bytes |
+| `e0 18 0a 20 2a` | 35 bytes |
+| `e0 02 03 03` | 11 bytes |
+| `20 07 e0 0b` | 21 bytes |
+
+Ruled out by direct test against this pair: byte-aligned LZSS with an 8-bit flag
+byte (all bit orders, 8/12/13-bit offsets, all biases, three start offsets),
+and LZ4 block format (invalid at every start phase 0-7). The literal ASCII runs
+(`default`, `cd cc cc 3e`, `3f 9a 99 19`) survive byte-for-byte, so literals are
+byte-aligned; the mismatched token lengths mean the tokens themselves are
+bit-packed.
+
+Reproduce with:
+
+```
+tools/fm8_oracle.py  ->  gdb script: break at base+0xf8c40, dump [storage+0x20]
+```
+
+## Next
+
+Set a hardware watchpoint on the decompression buffer found at `readChunkOfType`
+and let the decoder write it, which drops the PC straight into the decoder; the
+pair above then only has to confirm the reading.
