@@ -249,7 +249,7 @@ def check_corpus(directory: str, verbose: bool = True) -> int:
     if not files:
         print("no .nfm8 files under %s" % directory)
         return 1
-    ok = strict_ok = flags_ok = 0
+    ok = strict_ok = flags_ok = aligned = 0
     failed = []
     for path in files:
         try:
@@ -261,6 +261,13 @@ def check_corpus(directory: str, verbose: bool = True) -> int:
             if run is None:
                 raise ValueError("breakpoint invariants failed")
             ok += 1
+            # The variable envelope section must end exactly where the
+            # layout-corrected parameter 178 begins (reference offset 2212).
+            if (section.end_offset - patch.payload
+                    == fm8env.schema_offset(patch, 2212)):
+                aligned += 1
+            else:
+                raise ValueError("envelope end does not align with param 178")
             if not any(env.has_sentinel for env in
                        section.destination_envelopes.values()):
                 strict_ok += 1
@@ -272,11 +279,12 @@ def check_corpus(directory: str, verbose: bool = True) -> int:
     if verbose:
         print("corpus: %d files" % len(files))
         print("  breakpoint invariants : %d/%d" % (ok, len(files)))
+        print("  envelope end aligned  : %d/%d" % (aligned, len(files)))
         print("  no sentinel times      : %d/%d" % (strict_ok, len(files)))
         print("  flag arrays 0/1/128/255: %d/%d" % (flags_ok, len(files)))
         for path, exc in failed[:10]:
             print("  FAIL %s: %s" % (os.path.basename(path), exc))
-    if failed or ok != len(files) or flags_ok != len(files):
+    if failed or ok != len(files) or aligned != len(files) or flags_ok != len(files):
         return 1
     # The three files with sentinel X/Z times are expected, not a failure.
     return 0

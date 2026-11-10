@@ -19,11 +19,14 @@ part of the parameter stream:
 * three runs of nine records follow each other: times, levels, slopes;
 * the destination order is `A, B, C, D, E, F, X, Z, Pitch`;
 * times are stored in milliseconds: BP1 absolute, then per-segment deltas;
+* three keyscale runs follow the breakpoints: pitch (9 records), level
+  (9 records), and slope (6 records, A-F only); velocity scaling is a single
+  amount, not a curve;
 * the same grammar is used by the 1.7.4, 1.7.8 and 1.7.14 files tested.
 
 The original `+49` shift observation was real, and it is now explained: it
 applies to parameter fields **after** the envelope section, where
-`+49 = (header 81 - 56) + (envelope section 601 - 577)`.  Fields before the
+`+49 = (header 81 - 56) + (envelope section 675 - 651)`.  Fields before the
 section (including the flag array) shift by `+25`.  The envelope/flag anchors
 are header-relative, so they do not need either shift.  See
 [`ENVELOPES.md`](ENVELOPES.md) §6.1.
@@ -78,6 +81,7 @@ Validation currently reports:
 GUI oracle: OK (A/B/D/F/Pitch and flags)
 corpus: 1155 files
   breakpoint invariants : 1155/1155
+  envelope end aligned  : 1155/1155
   no sentinel times      : 1084/1155
   flag arrays 0/1/128/255: 1155/1155
 writer oracle: OK (A times/level/slope and F flag survive FM8)

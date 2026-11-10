@@ -317,6 +317,8 @@ Summary:
   compacting).
 * Three runs of nine records: times, levels, slopes.  Destinations in order:
   `A, B, C, D, E, F, X, Z, Pitch`.
+* Three keyscale runs follow: pitch (9 destinations), level (9), slope (6,
+  A–F only).  Velocity scaling is a single amount, not a curve.
 * Times are milliseconds: BP1 absolute, then per-segment deltas.  FM8 displays
   seconds.
 * The same grammar and anchors work for the 1.7.4, 1.7.8 and 1.7.14 factory

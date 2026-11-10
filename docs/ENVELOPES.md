@@ -110,7 +110,7 @@ same `nseg` in the time, level and slope runs.  This is what makes the run
 locatable without guessing offsets.
 
 The records are variable length, so the end of the section depends on the
-breakpoint counts.  The two scaling runs follow (see §6).
+breakpoint counts.  The three keyscale runs follow (see §6).
 
 ## 3. Time interpretation
 
@@ -174,50 +174,67 @@ in the 1.7.14 payload.  All 1155 factory patches have a valid flag array.
 > anchors, the correct version rule is header-relative; Whitty (1.7.8) is
 > `schema_offset + 25`, not `+ 49`, for the flag bytes.
 
-## 6. The two scaling runs
+## 6. The three keyscale runs
 
-After the 27 breakpoint records the same record grammar continues for exactly
-two more runs of nine records:
+After the 27 breakpoint records the same record grammar continues with three
+**keyscale** runs.  The macOS symbol names make the taxonomy explicit:
 
-| run | records | observed values | interpretation |
-|---|---|---|---|
-| `scaling_a` | 9 | `0..127` (e.g. `0, 60, 127`) | probably key/velocity positions |
-| `scaling_b` | 9 | mostly `-80..0`, sometimes `0..1` | probably dB/amounts for those positions |
+* `KeyScaleTags` has pitch, level and slope tags;
+* `FM8Program::GetParameterKeyScale` indexes
+  `object + tag*0x480 + destination*0x80 + point*4 + 0x1a8c`;
+* the name table contains `Keyscale Pitch of Point`, `Keyscale Level of Point`
+  and `Keyscale Slope of Point`.
 
-The Env page exposes numeric `Key Scaling` and `Vel Scaling` fields; the VST
-parameters `Op. X EnvKeyScal` / `EnvVelScal` (indices 602–619) are mapped by
-`param_schema.json`.  The two nine-record runs are almost certainly the
-corresponding curve data, but which run is key and which is velocity has not
-been proven against the GUI.  `fm8env` therefore exposes them raw
-(`EnvelopeSection.scaling_a`, `.scaling_b`) instead of inventing a breakpoint
-interpretation.
+The serialized order is:
 
-Base patch example: `scaling_a` is `[0, 60, 127]` for all nine envelopes and
-`scaling_b` is `[0, 0, 0]`, i.e. a flat, inactive scaling curve.
+| run | records | destinations | stored values | meaning |
+|---|---|---|---|---|
+| `scaling_a` | 9 | A–F, X, Z, Pitch | `0..127` | keyscale **pitch** (key positions) |
+| `scaling_b` | 9 | A–F, X, Z, Pitch | mostly `-80..0` dB | keyscale **level** |
+| `scaling_c` | 6 | A–F | mostly `0..1` (default `0.5`) | keyscale **slope** |
 
-The bytes immediately after `scaling_b` are **not** envelope data.  They are the
-next parameter section of the `FM8E` payload.  In the 1.7.14 reference chunk
-`tmp/base.bin`, the envelope section is 577 bytes (`1561..2138` payload-
-relative) and the next mapped schema field is parameter 178 at offset 2212.
+`X`, `Z` and `Pitch` have no keyscale slope curve, which is why the last run has
+six records instead of nine.  **Velocity scaling has no curve here**: it is the
+single `Op. X EnvVelScal` amount (VST parameters 611–619), separate from the
+serialized keyscale arrays.  The `Op. X EnvKeyScal` amount (parameters 602–610)
+likewise scales the keyscale curve at runtime.
+
+`fm8env` exposes the three runs raw as `EnvelopeSection.scaling_a`,
+`.scaling_b` and `.scaling_c`, with named aliases `.keyscale_pitch`,
+`.keyscale_level` and `.keyscale_slope`.  They are curve data, not breakpoints.
+
+Base-patch example:
+
+```
+scaling_a (pitch)  [0, 60, 127] for all nine destinations
+scaling_b (level)  [0, 0, 0]    for A–F and X/Z; special defaults for Pitch
+scaling_c (slope)  [0.5, 0.5, 0.5] for A–F
+```
+
+The bytes immediately after `scaling_c` are the next parameter section.  In the
+1.7.14 reference chunk `tmp/base.bin`, the envelope section is **651 bytes**
+(`1561..2212` payload-relative) and the next mapped schema field is parameter
+178 at offset 2212.  For `Whitty_Lead_` the section is **675 bytes**
+(`1586..2261`).
 
 ### 6.1 Effect on parameter offsets (the `+49` mystery)
 
 The envelope section is variable length and sits in the middle of the payload.
 Every `data/param_schema.json` field **after** it shifts by the difference in
 envelope size.  The reference chunk used to measure the schema has a 56-byte
-header and a 577-byte envelope section:
+header and a 651-byte envelope section:
 
 ```
 shift_before = header_length - 56
-shift_after  = (header_length - 56) + (envelope_size - 577)
+shift_after  = (header_length - 56) + (envelope_size - 651)
 ```
 
 For `Whitty_Lead_` (1.7.8):
 
 ```
-header_length = 81                    -> +25
-envelope_size  = 375 + 113 + 113 = 601 -> +24 extra
-shift_after    = 25 + 24 = 49
+header_length = 81
+envelope_size = 375 (breakpoints) + 113 + 113 + 74 (keyscale) = 675
+shift_after   = (81 - 56) + (675 - 651) = 25 + 24 = 49
 ```
 
 That is exactly the empirical `+49` in the original handoff.  It applies only to
@@ -225,7 +242,7 @@ fields after the envelope section; fields before it (including the flag array)
 shift by `+25`.  `fm8env.schema_offset(patch, offset)` implements both cases, and
 `EnvelopeSection.parameter_shift` exposes the post-section value.
 
-The envelope section size varies widely across the factory library (521 to 2725
+The envelope section size varies widely across the factory library (579 to 2991
 bytes in the 1155-patch corpus), so a fixed schema offset cannot be correct for
 every patch.  `fm8param`'s default `get`/`set` use the reference offsets;
 pass `layout=True` to apply the correction:
@@ -238,7 +255,7 @@ p.get(178, layout=True)  # 0.34 - A->A BL, using the +49 shift
 
 The standalone helper is `fm8env.schema_offset(patch, offset)`.
 
-A quick sanity check over 30 randomly chosen factory patches: all 150 sampled
+A sanity check over 30 randomly chosen factory patches: all 150 sampled
 post-envelope fields (matrix/output-level parameters) decoded in `0..1` with
 `layout=True`, versus 142 with the fixed reference offsets.  This is a
 plausibility check, not a substitute for value-level validation.
@@ -349,6 +366,7 @@ Current result:
 GUI oracle: OK (A/B/D/F/Pitch and flags)
 corpus: 1155 files
   breakpoint invariants : 1155/1155
+  envelope end aligned  : 1155/1155
   no sentinel times      : 1084/1155
   flag arrays 0/1/128/255: 1155/1155
 writer oracle: OK (A times/level/slope and F flag survive FM8)
@@ -412,7 +430,7 @@ python fm8env.py patch.nfm8 --apply env.json --output edited.nfm8
 ### Resizing breakpoint counts (experimental, not accepted by FM8 in tests)
 
 `fm8env.write_envelopes(..., resize=True)` rebuilds the 27 breakpoint records,
-keeps the two scaling runs, splices the new section, and fixes:
+keeps the three keyscale runs, splices the new section, and fixes:
 
 * the inner tree total-size word;
 * the enclosing `hsin`/`DSIN` sizes;
@@ -444,8 +462,10 @@ for bp in a.breakpoints:             # 1-based, GUI units
 print(envs['F'].flags)               # {'pitch_env': True, 'loop': True, 'release': True}
 print(envs['Z'].has_sentinel)        # True for an unused Z envelope
 
-section = p.envelope_section()       # also exposes scaling_a/b
-print(section.scaling_a.values)      # raw post-slope records
+section = p.envelope_section()       # also exposes scaling_a/b/c
+print(section.keyscale_pitch.values) # key positions
+print(section.keyscale_level.values) # dB amounts
+print(section.keyscale_slope.values) # slopes (A-F)
 print(section.parameter_shift)       # shift for later schema offsets
 
 fm8env.write_envelopes(p, {'A': a})          # same-size values/flags

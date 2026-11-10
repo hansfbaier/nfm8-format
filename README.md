@@ -28,9 +28,10 @@ verification oracle.
 > **Envelopes:** the operator/filter/pitch **breakpoint envelopes** are decoded
 > separately from the VST parameter schema. `fm8param.Patch.envelopes()` and
 > `fm8env.py` read the breakpoint times, levels and slopes for A–F, X, Z and
-> Pitch, plus the `P.Env` / `Env Loop` / `Env Rel` flags. The layout is
-> header-relative and the same grammar works across the 1.7.4, 1.7.8 and 1.7.14
-> factory files tested (1155/1155). See [`docs/ENVELOPES.md`](docs/ENVELOPES.md)
+> Pitch, plus the `P.Env` / `Env Loop` / `Env Rel` flags and the three
+> keyscale runs (pitch/level/slope). The layout is header-relative and the same
+> grammar works across the 1.7.4, 1.7.8 and 1.7.14 factory files tested
+> (1155/1155). See [`docs/ENVELOPES.md`](docs/ENVELOPES.md)
 > for the specification, worked example and validation; the former open handoff
 > is now [`docs/ENVELOPES_HANDOFF.md`](docs/ENVELOPES_HANDOFF.md).
 

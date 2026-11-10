@@ -28,6 +28,11 @@ Envelope order in every run is::
 
     A, B, C, D, E, F, X, Z, Pitch
 
+After the breakpoint records come three keyscale runs, using the same record
+grammar:  nine keyscale-pitch records (A-F, X, Z, Pitch), nine keyscale-level
+records, and six keyscale-slope records (A-F only).  Velocity scaling is a
+separate single amount, not a serialized curve.
+
 Times are `BP1 absolute time` followed by per-segment deltas:
 
     AbsT[0] = value[0]
@@ -78,12 +83,12 @@ SENTINEL_MS = 1_000_000.0
 MAX_SEGMENTS = 96
 
 #: The parameter schema offsets in data/param_schema.json were measured on the
-#: 1.7.14 default chunk (tmp/base.bin): 56-byte header and a 577-byte envelope
+#: 1.7.14 default chunk (tmp/base.bin): 56-byte header and a 651-byte envelope
 #: section.  A patch with a different header length or breakpoint counts shifts
 #: every schema field after the envelope section; see schema_offset().
 REFERENCE_HEADER_LENGTH = 56
 REFERENCE_ENVELOPE_START = 1561          # 56 + BREAKPOINT_OFFSET
-REFERENCE_ENVELOPE_SIZE = 577
+REFERENCE_ENVELOPE_SIZE = 651
 REFERENCE_ENVELOPE_END = REFERENCE_ENVELOPE_START + REFERENCE_ENVELOPE_SIZE
 
 #: The three flag groups, nine destinations each, in the order they are stored.
@@ -306,11 +311,11 @@ class Envelope:
 
 @dataclass
 class ScalingRun:
-    """One of the two post-slope scaling record runs.
+    """One of the three keyscale record runs.
 
-    The record grammar is the same as for breakpoints, but the semantics of the
-    values are only partly established (see docs/ENVELOPES.md).  They are
-    exposed raw rather than interpreted as breakpoints.
+    The record grammar is the same as for breakpoints.  The three runs are
+    keyscale pitch (9 destinations), keyscale level (9) and keyscale slope
+    (A-F only).  They are curve data, not breakpoints.
     """
 
     records: List[tuple]
@@ -328,6 +333,7 @@ class EnvelopeSection:
     destination_envelopes: Dict[str, Envelope]
     scaling_a: Optional[ScalingRun]
     scaling_b: Optional[ScalingRun]
+    scaling_c: Optional[ScalingRun]
     breakpoint_offset: int
     end_offset: int
     flag_offset: int
@@ -345,6 +351,22 @@ class EnvelopeSection:
         return ((self.header_length - REFERENCE_HEADER_LENGTH)
                 + (self.envelope_size - REFERENCE_ENVELOPE_SIZE))
 
+    # The three serialized keyscale runs, named after the macOS KeyScaleTags.
+    @property
+    def keyscale_pitch(self) -> Optional[ScalingRun]:
+        """Key positions (0..127) for A-F, X, Z and Pitch."""
+        return self.scaling_a
+
+    @property
+    def keyscale_level(self) -> Optional[ScalingRun]:
+        """Keyscale level (dB) for A-F, X, Z and Pitch."""
+        return self.scaling_b
+
+    @property
+    def keyscale_slope(self) -> Optional[ScalingRun]:
+        """Keyscale slope (0..1) for A-F only."""
+        return self.scaling_c
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "header_end": self.header_end,
@@ -359,6 +381,7 @@ class EnvelopeSection:
             },
             "scaling_a": self.scaling_a.to_dict() if self.scaling_a else None,
             "scaling_b": self.scaling_b.to_dict() if self.scaling_b else None,
+            "scaling_c": self.scaling_c.to_dict() if self.scaling_c else None,
         }
 
 
@@ -576,7 +599,7 @@ def write_envelopes(patch: Any, envelopes: Dict[str, Any], *,
             write_flags(patch, flag_updates)
         return patch
 
-    # Resizing path: rebuild all 27 breakpoint records, keep the two scaling
+    # Resizing path: rebuild all 27 breakpoint records, keep the three scaling
     # runs byte-for-byte, splice, and fix the enclosing inner-tree lengths.
     ancestors = _inner_ancestors(patch, section.breakpoint_offset)
     bp_bytes = b"".join(
@@ -613,7 +636,7 @@ def read_envelopes(patch: Any, strict: bool = True) -> Dict[str, Envelope]:
 
 
 def read_section(patch: Any, strict: bool = True) -> EnvelopeSection:
-    """Decode the breakpoint records and the two scaling runs."""
+    """Decode the breakpoint records and the three keyscale runs."""
     he = header_end(patch)
     buf = patch.inner
 
@@ -646,9 +669,9 @@ def read_section(patch: Any, strict: bool = True) -> EnvelopeSection:
             slope_offset=slopes[i][0],
         )
 
-    # Two nine-record scaling runs follow the slopes.  They are the last
-    # envelope-owned records; the next byte starts the following parameter
-    # section (whose schema offsets are shifted by parameter_shift).
+    # Three keyscale runs follow the slopes: pitch (9), level (9), slope (6,
+    # A-F only).  They are the last envelope-owned records; the next byte
+    # starts the following parameter section.
     cursor = pos + _run_size(recs)
     scaling_a = _read_run(buf, cursor, 9)
     if scaling_a is not None:
@@ -656,11 +679,15 @@ def read_section(patch: Any, strict: bool = True) -> EnvelopeSection:
     scaling_b = _read_run(buf, cursor, 9)
     if scaling_b is not None:
         cursor += _run_size(scaling_b)
+    scaling_c = _read_run(buf, cursor, 6)
+    if scaling_c is not None:
+        cursor += _run_size(scaling_c)
 
     return EnvelopeSection(
         destination_envelopes=envelopes,
         scaling_a=ScalingRun(scaling_a) if scaling_a else None,
         scaling_b=ScalingRun(scaling_b) if scaling_b else None,
+        scaling_c=ScalingRun(scaling_c) if scaling_c else None,
         breakpoint_offset=pos,
         end_offset=cursor,
         flag_offset=he + FLAG_OFFSET,
@@ -673,13 +700,13 @@ def parameter_shift(patch: Any) -> int:
     """Return the shift for schema offsets **after** the envelope section.
 
     `data/param_schema.json` offsets were measured on the 1.7.14 default chunk,
-    which has a 56-byte header and a 577-byte envelope section.  A patch with a
+    which has a 56-byte header and a 651-byte envelope section.  A patch with a
     different header length or different breakpoint counts shifts every field
     after the envelope section by::
 
-        (header_length - 56) + (envelope_size - 577)
+        (header_length - 56) + (envelope_size - 651)
 
-    For `Whitty_Lead_` this is `(81 - 56) + (601 - 577) = 49`, which is exactly
+    For `Whitty_Lead_` this is `(81 - 56) + (675 - 651) = 49`, which is exactly
     the empirical `+49` from the original handoff.
     """
     he = header_end(patch)
@@ -719,6 +746,9 @@ def _envelope_owned_size(patch: Any) -> int:
     scaling_b = _read_run(buf, cursor, 9)
     if scaling_b is not None:
         cursor += _run_size(scaling_b)
+    scaling_c = _read_run(buf, cursor, 6)
+    if scaling_c is not None:
+        cursor += _run_size(scaling_c)
     return cursor - pos
 
 
