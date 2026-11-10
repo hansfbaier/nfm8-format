@@ -149,8 +149,16 @@ def check_writer_oracle(verbose: bool = True) -> int:
         a.time_values_ms[0] = 3.0
         a.levels[1] = 0.8
         a.slopes[2] = 0.65
+        a.tempo_sync = True
+        a.key_scaling = 0.25
+        a.velocity_scaling = 0.75
         envs["F"].flags["pitch_env"] = False
         fm8env.write_envelopes(patch, {"A": a, "F": envs["F"]})
+        keyscales = fm8env.read_keyscales(patch)
+        keyscales["pitch"]["A"] = [0.0, 64.0, 127.0]
+        keyscales["level"]["A"] = [0.0, -12.0, 0.0]
+        keyscales["slope"]["A"] = [0.4, 0.5, 0.6]
+        fm8env.write_keyscales(patch, keyscales)
         patch.write(edited)
 
         run = subprocess.run([vsthost, dll, "setchunk", edited, state],
@@ -168,6 +176,22 @@ def check_writer_oracle(verbose: bool = True) -> int:
                 errors.append("A BP3 slope not preserved: %r" % got.slopes[2])
             if out.envelopes()["F"].flags["pitch_env"]:
                 errors.append("F P.Env flag not preserved")
+            if not out.envelopes()["A"].tempo_sync:
+                errors.append("A Tempo Sync not preserved")
+            if not close(out.envelopes()["A"].key_scaling, 0.25):
+                errors.append("A keyscale amount not preserved")
+            if not close(out.envelopes()["A"].velocity_scaling, 0.75, 0.005):
+                errors.append("A velocity-scaling amount not preserved")
+            ks = fm8env.read_keyscales(out)
+            if not all(close(a, b) for a, b in
+                       zip(ks["pitch"]["A"], [0.0, 64.0, 127.0])):
+                errors.append("A keyscale pitch not preserved")
+            if not all(close(a, b) for a, b in
+                       zip(ks["level"]["A"], [0.0, -12.0, 0.0])):
+                errors.append("A keyscale level not preserved")
+            if not all(close(a, b) for a, b in
+                       zip(ks["slope"]["A"], [0.4, 0.5, 0.6])):
+                errors.append("A keyscale slope not preserved")
     finally:
         import shutil
         shutil.rmtree(work, ignore_errors=True)
@@ -178,7 +202,7 @@ def check_writer_oracle(verbose: bool = True) -> int:
             for e in errors:
                 print("  " + e)
         else:
-            print("writer oracle: OK (A times/level/slope and F flag survive FM8)")
+            print("writer oracle: OK (A envelope, keyscale, Tempo Sync, amounts and F flag survive FM8)")
     return 1 if errors else 0
 
 

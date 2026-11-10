@@ -102,6 +102,7 @@ Read the breakpoint envelopes:
 python fm8env.py MyPatch.nfm8              # all nine envelopes
 python fm8env.py MyPatch.nfm8 -o A --raw   # one envelope, stored arrays
 python fm8env.py MyPatch.nfm8 --json       # machine-readable
+python fm8env.py MyPatch.nfm8 --keyscales  # keyscale pitch/level/slope
 python tools/check_envelopes.py            # oracle + factory-library validation
 
 # edit a JSON dump and write the values back (same breakpoint counts)
@@ -116,6 +117,8 @@ p = fm8param.Patch('MyPatch.nfm8')
 for bp in p.envelopes()['A'].breakpoints:
     print(bp.index, bp.abs_time_s, bp.rel_time_s, bp.level, bp.slope)
 print(p.env_flags()['F'])       # P.Env / Loop / Rel
+print(p.envelopes()['A'].tempo_sync, p.envelopes()['A'].key_scaling_display)
+print(p.keyscales()['pitch']['A'])  # keyscale pitch curve
 print(p.get(178, layout=True))  # schema field after the variable envelope block
 ```
 

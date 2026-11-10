@@ -244,6 +244,10 @@ class Envelope:
     slopes: List[float]
     flags: Dict[str, bool]
     raw_flag_bytes: Dict[str, int]
+    tempo_sync: Optional[bool] = None
+    key_scaling: Optional[float] = None
+    velocity_scaling: Optional[float] = None
+    mode: str = "SLD"
     time_offset: int = 0
     level_offset: int = 0
     slope_offset: int = 0
@@ -251,6 +255,35 @@ class Envelope:
     @property
     def segment_count(self) -> int:
         return len(self.time_values_ms) - 1
+
+    @property
+    def sus(self) -> Optional[bool]:
+        """GUI `Sus` toggle; internally the `Env Loop` flag."""
+        return self.flags.get("loop")
+
+    @property
+    def release(self) -> bool:
+        """GUI `Rel` toggle."""
+        return bool(self.flags.get("release"))
+
+    @property
+    def key_scaling_display(self) -> Optional[float]:
+        """Keyscale amount in GUI percent (0..100)."""
+        if self.key_scaling is None:
+            return None
+        return round(self.key_scaling * 100.0)
+
+    @property
+    def velocity_scaling_display(self) -> Optional[float]:
+        """Velocity scaling in GUI units (-99..100, centre 0).
+
+        The stored field is a signed byte with base 157 and range 199; the
+        default VST value 0.4975 encodes to 0.
+        """
+        if self.velocity_scaling is None:
+            return None
+        stored = round(157.0 + 199.0 * self.velocity_scaling) % 256
+        return stored - 256 if stored >= 128 else stored
 
     @property
     def abs_times_ms(self) -> List[float]:
@@ -294,6 +327,14 @@ class Envelope:
             "destination": self.destination,
             "flags": dict(self.flags),
             "raw_flag_bytes": dict(self.raw_flag_bytes),
+            "tempo_sync": self.tempo_sync,
+            "key_scaling": self.key_scaling,
+            "key_scaling_display": self.key_scaling_display,
+            "velocity_scaling": self.velocity_scaling,
+            "velocity_scaling_display": self.velocity_scaling_display,
+            "sus": self.sus,
+            "release": self.release,
+            "mode": self.mode,
             "offsets": {
                 "times": self.time_offset,
                 "levels": self.level_offset,
@@ -522,6 +563,47 @@ def _fix_lengths_after_splice(patch: Any, insert_at: int, old_len: int,
             struct.pack_into("<I", buf, field, old + delta)
 
 
+def _coerce_envelope_settings(value: Any) -> Dict[str, Any]:
+    """Extract Tempo Sync / keyscale / velocity-scaling settings."""
+    if isinstance(value, Envelope):
+        return {
+            "tempo_sync": value.tempo_sync,
+            "key_scaling": value.key_scaling,
+            "velocity_scaling": value.velocity_scaling,
+        }
+    if isinstance(value, dict):
+        return {k: value[k] for k in
+                ("tempo_sync", "key_scaling", "velocity_scaling")
+                if k in value}
+    return {}
+
+
+def _write_settings(patch: Any, updates: Dict[str, Dict[str, Any]]) -> None:
+    setter = getattr(patch, "set", None)
+    if setter is None:
+        return
+    for dest, values in updates.items():
+        i = DESTINATIONS.index(dest)
+        if values.get("tempo_sync") is not None:
+            setter(575 + i, 1.0 if values["tempo_sync"] else 0.0, layout=True)
+        if values.get("key_scaling") is not None:
+            setter(602 + i, float(values["key_scaling"]), layout=True)
+        if values.get("velocity_scaling") is not None:
+            setter(611 + i, float(values["velocity_scaling"]), layout=True)
+
+
+def _replace_envelope_section(patch: Any, section: EnvelopeSection,
+                              new_section: bytes) -> None:
+    """Splice a rebuilt envelope section and fix every enclosing length."""
+    ancestors = _inner_ancestors(patch, section.breakpoint_offset)
+    old_len = len(patch.inner)
+    delta = len(new_section) - (section.end_offset - section.breakpoint_offset)
+    patch.inner[section.breakpoint_offset:section.end_offset] = new_section
+    patch.plain_len += delta
+    _fix_lengths_after_splice(patch, section.breakpoint_offset, old_len,
+                              delta, ancestors)
+
+
 def write_envelopes(patch: Any, envelopes: Dict[str, Any], *,
                     write_flag_values: bool = True, strict: bool = True,
                     resize: bool = False) -> Any:
@@ -545,6 +627,7 @@ def write_envelopes(patch: Any, envelopes: Dict[str, Any], *,
     buf = patch.inner
     staged = []
     flag_updates: Dict[str, Dict[str, bool]] = {}
+    settings_updates: Dict[str, Dict[str, Any]] = {}
     arrays: Dict[str, tuple] = {}
 
     for dest in DESTINATIONS:
@@ -576,6 +659,16 @@ def write_envelopes(patch: Any, envelopes: Dict[str, Any], *,
                     raise ValueError("%s %s value out of range: %r"
                                      % (dest, label, v))
         arrays[dest] = (times, levels, slopes)
+        settings = _coerce_envelope_settings(envelopes[dest]) if dest in envelopes else {}
+        if settings:
+            if settings.get("tempo_sync") is not None:
+                settings["tempo_sync"] = bool(settings["tempo_sync"])
+            for key, label in (("key_scaling", "keyscale"),
+                               ("velocity_scaling", "velocity")):
+                if settings.get(key) is not None and not (0.0 <= float(settings[key]) <= 1.0):
+                    raise ValueError("%s %s setting out of range: %r"
+                                     % (dest, label, settings[key]))
+            settings_updates[dest] = settings
         if dest in envelopes:
             staged.append((current.time_offset, times))
             staged.append((current.level_offset, levels))
@@ -597,11 +690,11 @@ def write_envelopes(patch: Any, envelopes: Dict[str, Any], *,
                              *[float(v) for v in values])
         if flag_updates:
             write_flags(patch, flag_updates)
+        _write_settings(patch, settings_updates)
         return patch
 
     # Resizing path: rebuild all 27 breakpoint records, keep the three scaling
     # runs byte-for-byte, splice, and fix the enclosing inner-tree lengths.
-    ancestors = _inner_ancestors(patch, section.breakpoint_offset)
     bp_bytes = b"".join(
         _encode_record(arrays[d][run])
         for run in range(3)
@@ -610,15 +703,10 @@ def write_envelopes(patch: Any, envelopes: Dict[str, Any], *,
     old_bp_size = _run_size(_read_run(buf, section.breakpoint_offset, 27))
     scaling_bytes = bytes(buf[section.breakpoint_offset + old_bp_size:
                               section.end_offset])
-    new_section = bp_bytes + scaling_bytes
-    old_len = len(buf)
-    delta = len(new_section) - (section.end_offset - section.breakpoint_offset)
-    buf[section.breakpoint_offset:section.end_offset] = new_section
-    patch.plain_len += delta
-    _fix_lengths_after_splice(patch, section.breakpoint_offset, old_len,
-                              delta, ancestors)
+    _replace_envelope_section(patch, section, bp_bytes + scaling_bytes)
     if flag_updates:
         write_flags(patch, flag_updates)
+    _write_settings(patch, settings_updates)
     return patch
 
 
@@ -633,6 +721,102 @@ def read_envelopes(patch: Any, strict: bool = True) -> Dict[str, Envelope]:
         dest: env
         for dest, env in read_section(patch, strict=strict).destination_envelopes.items()
     }
+
+
+KEYSCALE_RUNS = (
+    ("pitch", "scaling_a", DESTINATIONS),
+    ("level", "scaling_b", DESTINATIONS),
+    ("slope", "scaling_c", DESTINATIONS[:6]),
+)
+
+
+def read_keyscales(patch: Any, strict: bool = True) -> Dict[str, Dict[str, list]]:
+    """Return the three keyscale runs as ``{run: {destination: values}}``."""
+    section = read_section(patch, strict=strict)
+    out: Dict[str, Dict[str, list]] = {}
+    for name, attr, dests in KEYSCALE_RUNS:
+        run = getattr(section, attr)
+        out[name] = {}
+        if run is None:
+            continue
+        for dest, record in zip(dests, run.records):
+            out[name][dest] = list(record[2])
+    return out
+
+
+def write_keyscales(patch: Any, keyscales: Dict[str, Dict[str, Sequence[float]]],
+                    *, resize: bool = False, strict: bool = True) -> Any:
+    """Write keyscale pitch/level/slope curves.
+
+    Accepts a partial mapping, e.g.::
+
+        {"pitch": {"A": [0, 60, 127]},
+         "level": {"A": [0, -6.0, 0]},
+         "slope": {"A": [0.5, 0.5, 0.5]}}
+
+    The `pitch` and `level` runs cover A–F, X, Z and Pitch; `slope` covers
+    A–F only.  With the default ``resize=False`` every curve must keep its
+    point count.  ``resize=True`` rebuilds the envelope section and fixes the
+    inner-tree lengths; like breakpoint resizing, verify the result with FM8.
+    """
+    section = read_section(patch, strict=strict)
+    buf = patch.inner
+    new_values: Dict[str, Dict[str, List[float]]] = {}
+    write_ops = []
+    sizes_differ = False
+
+    for name, attr, dests in KEYSCALE_RUNS:
+        run = getattr(section, attr)
+        given = keyscales.get(name, {})
+        extra = set(given) - set(dests)
+        if extra:
+            raise ValueError("%s keyscale has no destinations %s"
+                             % (name, ", ".join(sorted(extra))))
+        new_values[name] = {}
+        for idx, dest in enumerate(dests):
+            if run is not None and idx < len(run.records):
+                current = list(run.records[idx][2])
+                offset = run.records[idx][0]
+            else:
+                current = []
+                offset = None
+            values = list(given[dest]) if dest in given else current
+            if not values:
+                raise ValueError("%s/%s keyscale curve is empty" % (name, dest))
+            for v in values:
+                if not math.isfinite(v) or not (-1000.0 <= v <= 1000.0):
+                    raise ValueError("%s/%s keyscale value out of range: %r"
+                                     % (name, dest, v))
+            new_values[name][dest] = values
+            if offset is not None:
+                write_ops.append((offset, values))
+            if len(values) != len(current):
+                sizes_differ = True
+            if offset is None:
+                sizes_differ = True
+
+    if sizes_differ and not resize:
+        raise ValueError("changing keyscale point counts requires resize=True")
+
+    if not sizes_differ:
+        for offset, values in write_ops:
+            n = len(values) - 1
+            if buf[offset] != n:
+                raise ValueError("keyscale record at %#x changed size" % offset)
+            struct.pack_into("<%df" % (n + 1), buf, offset + 1,
+                             *[float(v) for v in values])
+        return patch
+
+    bp_size = _run_size(_read_run(buf, section.breakpoint_offset, 27))
+    bp_bytes = bytes(buf[section.breakpoint_offset:
+                         section.breakpoint_offset + bp_size])
+    scaling_bytes = b"".join(
+        _encode_record(new_values[name][dest])
+        for name, _attr, dests in KEYSCALE_RUNS
+        for dest in dests
+    )
+    _replace_envelope_section(patch, section, bp_bytes + scaling_bytes)
+    return patch
 
 
 def read_section(patch: Any, strict: bool = True) -> EnvelopeSection:
@@ -655,8 +839,21 @@ def read_section(patch: Any, strict: bool = True) -> EnvelopeSection:
     flags = read_flags(patch)
     raw_flags = read_raw_flags(patch)
 
+    def vst(index):
+        """Best-effort read of a VST parameter from the same patch."""
+        getter = getattr(patch, "get", None)
+        if getter is None:
+            return None
+        try:
+            return getter(index, layout=True)
+        except Exception:
+            return None
+
     envelopes: Dict[str, Envelope] = {}
     for i, dest in enumerate(DESTINATIONS):
+        tempo = vst(575 + i)
+        key_amount = vst(602 + i)
+        vel_amount = vst(611 + i)
         envelopes[dest] = Envelope(
             destination=dest,
             time_values_ms=list(times[i][2]),
@@ -664,6 +861,9 @@ def read_section(patch: Any, strict: bool = True) -> EnvelopeSection:
             slopes=list(slopes[i][2]),
             flags=dict(flags[dest]),
             raw_flag_bytes=dict(raw_flags[dest]),
+            tempo_sync=None if tempo is None else bool(round(tempo)),
+            key_scaling=key_amount,
+            velocity_scaling=vel_amount,
             time_offset=times[i][0],
             level_offset=levels[i][0],
             slope_offset=slopes[i][0],
@@ -802,8 +1002,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="print the machine-readable layout description")
     ap.add_argument("--apply", metavar="JSON",
                     help="rewrite envelope values from a JSON dump")
+    ap.add_argument("--keyscales", action="store_true",
+                    help="emit keyscale pitch/level/slope curves as JSON")
+    ap.add_argument("--apply-keyscales", metavar="JSON",
+                    help="rewrite keyscale curves from a JSON dump")
     ap.add_argument("--resize", action="store_true",
-                    help="experimental: allow breakpoint-count changes with --apply")
+                    help="experimental: allow point-count changes")
     ap.add_argument("--output", "-w", metavar="FILE",
                     help="output file for --apply (default: <patch>.edited.nfm8)")
     args = ap.parse_args(argv)
@@ -822,6 +1026,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         ap.error("a patch file is required (or use --schema)")
 
     patch = fm8param.Patch(args.patch)
+
+    if args.apply_keyscales:
+        with open(args.apply_keyscales, encoding="utf-8") as fh:
+            data = json.load(fh)
+        write_keyscales(patch, data.get("keyscales", data), resize=args.resize)
+        out = args.output or (os.path.splitext(args.patch)[0] + ".edited.nfm8")
+        patch.write(out)
+        print("wrote %s" % out)
+        return 0
+
+    if args.keyscales:
+        print(json.dumps(read_keyscales(patch), indent=2))
+        return 0
 
     if args.apply:
         with open(args.apply, encoding="utf-8") as fh:

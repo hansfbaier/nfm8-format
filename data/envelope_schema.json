@@ -457,7 +457,7 @@
     "reproduce": "python tools/check_envelopes.py",
     "envelope_size_min": 579,
     "envelope_size_max": 2991,
-    "writer_oracle": "OK: A BP1 time, BP2 level, BP3 slope and F P.Env flag survive effSetChunk",
+    "writer_oracle": "OK: A envelope, keyscale, Tempo Sync, keyscale/velocity amounts and F P.Env flag survive effSetChunk",
     "envelope_end_aligned": 1155
   },
   "gui_oracle_Whitty_Lead": {
@@ -1003,6 +1003,12 @@
       "api": "fm8env.write_envelopes(..., resize=True)",
       "status": "experimental",
       "observation": "FM8 1.7.14 effSetChunk reverted resized envelopes to the default 3-point shape in grow and shrink tests; the resized file decodes correctly but the missing FM8 constraint is unidentified."
+    },
+    "keyscales": {
+      "read": "fm8env.read_keyscales(patch)",
+      "write": "fm8env.write_keyscales(patch, keyscales)",
+      "same_size": "validated through FM8 effSetChunk",
+      "resize": "experimental: pitch curve resize survived FM8; level/slope counts truncated to the old count"
     }
   },
   "keyscale_tags": {
@@ -1020,5 +1026,39 @@
     ],
     "slope_destinations": "A-F only",
     "velocity_scaling": "no serialized curve; single Op. X EnvVelScal amount (VST 611-619)"
+  },
+  "envelope_page": {
+    "tempo_sync": {
+      "params": "575-583 (A-F, X, Z, Pitch)",
+      "api": "Envelope.tempo_sync",
+      "model": "u8 bool"
+    },
+    "key_scaling": {
+      "params": "602-610",
+      "api": "Envelope.key_scaling / key_scaling_display",
+      "display": "0..100 percent"
+    },
+    "velocity_scaling": {
+      "params": "611-619",
+      "api": "Envelope.velocity_scaling / velocity_scaling_display",
+      "display": "-99..100, default 0"
+    },
+    "pitch_env": {
+      "params": "629-637",
+      "api": "Envelope.flags['pitch_env']"
+    },
+    "sus": {
+      "params": "638-646 (Env Loop)",
+      "api": "Envelope.sus (alias of flags[\"loop\"])"
+    },
+    "rel": {
+      "params": "647-655 (Env Rel)",
+      "api": "Envelope.release"
+    },
+    "mode": {
+      "params": null,
+      "api": "Envelope.mode",
+      "observed": "SLD constant"
+    }
   }
 }

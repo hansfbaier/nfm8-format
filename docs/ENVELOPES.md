@@ -260,6 +260,30 @@ post-envelope fields (matrix/output-level parameters) decoded in `0..1` with
 `layout=True`, versus 142 with the fixed reference offsets.  This is a
 plausibility check, not a substitute for value-level validation.
 
+### 6.2 Envelope-page settings
+
+The remaining controls on Expert → Env map to ordinary VST parameters in the
+main parameter stream, not to the envelope records:
+
+| GUI field | VST parameters | API |
+|---|---|---|
+| `Tempo Sync` | 575–583 (A–F, X, Z, Pitch) | `Envelope.tempo_sync` |
+| `Key Scaling` amount | 602–610 | `Envelope.key_scaling` / `.key_scaling_display` |
+| `Vel Scaling` amount | 611–619 | `Envelope.velocity_scaling` / `.velocity_scaling_display` |
+| `P.Env` | 629–637 | `Envelope.flags['pitch_env']` |
+| `Sus` | 638–646 (`Env Loop`) | `Envelope.sus` (alias of `flags['loop']`) |
+| `Rel` | 647–655 (`Env Rel`) | `Envelope.release` |
+| `Mode` | — | `Envelope.mode` (`"SLD"` observed) |
+
+The keyscale amount is a 0–100 percentage.  The velocity amount is a signed
+value in about −99..+100; its default VST value `0.4975` encodes to `0`
+(centre).  Both are written by `write_envelopes()` when present in the input
+`Envelope` or dict.
+
+`Mode` is displayed as `SLD` on all patches inspected; no separate VST
+parameter or serialized mode field was found, so it is exposed as the constant
+`"SLD"`.
+
 ## 7. X/Z sentinel times
 
 The X and Z envelopes are often unused.  Their **time arrays can then contain sentinel or
@@ -369,7 +393,7 @@ corpus: 1155 files
   envelope end aligned  : 1155/1155
   no sentinel times      : 1084/1155
   flag arrays 0/1/128/255: 1155/1155
-writer oracle: OK (A times/level/slope and F flag survive FM8)
+writer oracle: OK (A envelope, keyscale, Tempo Sync, amounts and F flag survive FM8)
 resize structure: OK (grow/shrink offsets; FM8 acceptance is separate)
 ```
 
@@ -407,10 +431,24 @@ Accepted input for each destination:
 * a dict with `breakpoints` in GUI units (`abs_time_s`, `rel_time_s`,
   `level`, `slope`), as produced by `Envelope.to_dict()`.
 
+Keyscale curves have their own writer:
+
+```python
+ks = fm8env.read_keyscales(p)      # {pitch|level|slope: {dest: values}}
+ks['pitch']['A'] = [0, 64, 127]
+ks['level']['A'] = [0, -12, 0]
+ks['slope']['A'] = [0.4, 0.5, 0.6]
+fm8env.write_keyscales(p, ks)      # same-size path
+```
+
+`write_keyscales(..., resize=True)` exists but is experimental: keyscale
+**pitch** resizing survived FM8 in tests, while level/slope and breakpoint
+counts were truncated to the old point count.
+
 The same-size path is validated through FM8 itself:
 
 ```
-writer oracle: OK (A times/level/slope and F flag survive FM8)
+writer oracle: OK (A envelope, keyscale, Tempo Sync, amounts and F flag survive FM8)
 resize structure: OK (grow/shrink offsets; FM8 acceptance is separate)
 ```
 
@@ -468,8 +506,13 @@ print(section.keyscale_level.values) # dB amounts
 print(section.keyscale_slope.values) # slopes (A-F)
 print(section.parameter_shift)       # shift for later schema offsets
 
-fm8env.write_envelopes(p, {'A': a})          # same-size values/flags
+fm8env.write_envelopes(p, {'A': a})          # same-size values/flags/settings
 fm8env.write_flags(p, {'F': {'pitch_env': False}})
+
+ks = fm8env.read_keyscales(p)                # pitch/level/slope curves
+fm8env.write_keyscales(p, ks)                # same-size keyscale writer
+print(a.tempo_sync, a.key_scaling_display, a.velocity_scaling_display)
+print(a.sus, a.release, a.mode)
 ```
 
 CLI:
@@ -477,7 +520,9 @@ CLI:
 ```bash
 python fm8env.py patch.nfm8                  # all nine envelopes
 python fm8env.py patch.nfm8 -o A --raw       # one envelope, stored arrays too
-python fm8env.py patch.nfm8 --json           # machine-readable
+python fm8env.py patch.nfm8 --json           # envelope data
+python fm8env.py patch.nfm8 --keyscales      # keyscale curves
+python fm8env.py patch.nfm8 --apply-keyscales ks.json --output edited.nfm8
 python fm8env.py patch.nfm8 --json > env.json
 python fm8env.py patch.nfm8 --apply env.json --output edited.nfm8
 python fm8env.py --schema                    # print data/envelope_schema.json
@@ -493,11 +538,12 @@ and the decoded `Whitty_Lead_` example.
   correct resized stream, but FM8 1.7.14 truncated resized envelopes to the old
   point count in testing; the state field FM8 uses for the count is not
   identified.  Treat resizing as experimental.
-* **Keyscale writer.** The decoder exposes keyscale pitch/level/slope; writing
-  those curves back is not implemented.
-* **Remaining Env-page fields.** `P.Env`, `Loop` and `Rel` are decoded.  `Mode`
-  (`SLD`), `Sus`, `Tempo Sync` and the keyscale/velocity scaling *amounts* are
-  not all exposed by the envelope API; the amounts are VST parameters 602–619.
+* **Keyscale resizing.** Same-size keyscale writing is validated.  Resizing the
+  keyscale pitch curve survived FM8; level/slope counts were truncated to the
+  old count.
+* **GUI label confirmation.** `Sus` is mapped to the internal `Env Loop` flag
+  and `Mode` is exposed as the observed constant `SLD`; this label mapping is
+  inferred, not verified from a GUI KeySc/Env-page log.
 * **GUI keyscale readback.** The pitch/level/slope mapping is derived from the
   macOS `KeyScaleTags` symbols and the stored values, not from a GUI KeySc-page
   log.

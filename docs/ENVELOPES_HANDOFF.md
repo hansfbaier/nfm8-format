@@ -84,7 +84,7 @@ corpus: 1155 files
   envelope end aligned  : 1155/1155
   no sentinel times      : 1084/1155
   flag arrays 0/1/128/255: 1155/1155
-writer oracle: OK (A times/level/slope and F flag survive FM8)
+writer oracle: OK (A envelope, keyscale, Tempo Sync, amounts and F flag survive FM8)
 resize structure: OK (grow/shrink offsets; FM8 acceptance is separate)
 ```
 
@@ -94,12 +94,15 @@ than silently interpreted as musical time.
 
 ## What is still not done
 
-* **Resizing envelopes.** Same-size writes (values and flags) are implemented
-  and validated through FM8's `effSetChunk`.  Adding/removing breakpoints is
-  implemented as `resize=True`, but FM8 1.7.14 reverted resized envelopes to the
-  default shape in tests, so resizing is experimental.
-* Proving the exact `Key Scaling` / `Vel Scaling` semantics of the two
-  nine-record scaling runs that follow the slopes.
+* **Breakpoint/level/slope resizing.** Same-size writes (values, keyscale
+  curves, settings and flags) are implemented and validated through FM8's
+  `effSetChunk`.  `resize=True` builds a correct stream, but FM8 1.7.14
+  truncates resized breakpoint counts and keyscale level/slope counts to the
+  old count; only the keyscale *pitch* curve resize survived.  The state field
+  FM8 uses for those counts is not identified.
+* **GUI label confirmation.** `Sus` is mapped to the internal `Env Loop` flag
+  and `Mode` is exposed as the observed constant `SLD`; this mapping is inferred
+  from symbols/stored values, not a GUI KeySc/Env-page log.
 * Making the layout correction automatic by default (it is available as
   `fm8param.Patch.get(..., layout=True)` and `fm8env.schema_offset`).
 * LFO shapes and other modulation curves not shown on Expert → Env.

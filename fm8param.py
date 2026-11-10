@@ -228,6 +228,16 @@ class Patch:
         import fm8env
         return fm8env.read_flags(self)
 
+    def keyscales(self):
+        """Return the pitch/level/slope keyscale curves."""
+        import fm8env
+        return fm8env.read_keyscales(self)
+
+    def write_keyscales(self, keyscales, resize=False):
+        """Write keyscale curves; same-size by default."""
+        import fm8env
+        return fm8env.write_keyscales(self, keyscales, resize=resize)
+
     # -- write ---------------------------------------------------------------
     def to_bytes(self):
         stream = fastlz.compress(bytes(self.inner))
