@@ -110,6 +110,7 @@ HASH_LOG = 13
 HASH_SIZE = 1 << HASH_LOG
 MAX_COPY = 32
 MAX_DISTANCE = 8191
+MAX_LEN = 263   # longest match one token can encode: 8 + 255
 
 
 def _hash(v):
@@ -135,13 +136,14 @@ def _literals(out, src, start, runs):
 
 
 def _match(out, length, distance):
-    length -= 3
-    if length < 7:
-        out.append((length << 5) | (distance >> 8))
+    """Encode a match.  Decoder: n = ctrl >> 5; if n == 7: n = 6 + extra;
+    total = n + 2."""
+    if length <= 8:
+        out.append(((length - 2) << 5) | (distance >> 8))
         out.append(distance & 0xFF)
     else:
         out.append((7 << 5) | (distance >> 8))
-        out.append(length - 7)
+        out.append(min(length - 9, 255))
         out.append(distance & 0xFF)
 
 
@@ -165,12 +167,13 @@ def compress(src, level=1):
         if ref < ip and distance < MAX_DISTANCE and _read32(src, ref) == hval:
             if anchor < ip:
                 _literals(out, src, anchor, ip - anchor)
+            start = ip
             ip += 3
             ref += 3
-            while ip < ip_bound and (ip - anchor) < 264 and src[ip] == src[ref]:
+            while ip < ip_bound and (ip - start) < MAX_LEN and src[ip] == src[ref]:
                 ip += 1
                 ref += 1
-            _match(out, ip - anchor, distance)
+            _match(out, ip - start, distance)
             anchor = ip
             if ip < ip_limit:
                 htab[_hash(_read32(src, ip - 2))] = ip - 2
