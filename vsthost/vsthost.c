@@ -160,6 +160,11 @@ static int loadFile(const char *path, void **out, size_t *len)
     return 0;
 }
 
+/* Module base of the plugin under test. A global so that a debugger can read
+ * it and compute addresses relative to the loaded image (used by the
+ * reverse-engineering scripts in analysis/). */
+void *g_fm8_base;
+
 int main(int argc, char **argv)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -170,6 +175,7 @@ int main(int argc, char **argv)
     const char *dllPath = argv[1];
     HMODULE mod = LoadLibraryA(dllPath);
     if (!mod) { fprintf(stderr, "LoadLibrary failed: %lu\n", GetLastError()); return 1; }
+    g_fm8_base = (void *)mod;
     AEffect *(*VSTPluginMain)(audioMasterCallback) =
         (AEffect *(*)(audioMasterCallback))GetProcAddress(mod, "VSTPluginMain");
     if (!VSTPluginMain) VSTPluginMain =

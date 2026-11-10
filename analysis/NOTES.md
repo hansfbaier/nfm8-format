@@ -291,3 +291,110 @@ mask these first — the earlier "first-diff offset" table is therefore UUID noi
 The override record encoding inside the last `hsin` (B bytes). Everything else in
 the file is now accounted for. Next: walk that block as the sparse table it must
 be (param index + packed value), using the default snapshot as the base.
+
+
+---
+
+# Live tracing with gdb (this is the way in)
+
+`gdb` from Strawberry Perl debugs the mingw-built host fine, and `vsthost` now
+exports `void *g_fm8_base` so a script can compute plugin addresses at runtime:
+
+```
+break vsthost.c:210              # after LoadLibraryA, before the command runs
+run "<FM8.dll>" chunk tmp/g.bin
+break *((char*)g_fm8_base + RVA) # RVA from the PE section table
+continue
+```
+
+PE mapping used throughout: `.text` VA 0x1000, raw 0x400, so
+`RVA = file_offset + 0xc00` for code.
+
+## Verified: the plaintext the preset writer emits
+
+`FM8Program::write` is at **RVA 0xeaa86** (file 0xe9e86). It is the function
+that an `effGetChunk` call reaches. Its body, straight from the disassembly:
+
+```
+writeU32('FM8E')                 ; RVA 0x8a92b0
+writeU32(0xcf)
+writeU32(0x23bc)
+writeString(this+0x2900)         ; RVA 0x8a9150
+writeString(this+0x2920)
+writeString(this+0x2940)
+writeString(this+0x2960)
+for i in 0..0x8a:  if (i-0xb) > 1: writeFloat(this + i*4 + 0x68)
+for i in 0..4: for j in 0..0x13:   writeFloat(this + (i*4+j)*4 + 0x290)
+...
+```
+
+Breaking after each call and dumping the stream's storage buffer
+(`[stream+8] -> storage`, buffer at `storage+0x20`, capacity at `storage+0x28`)
+gives the exact byte sequence:
+
+```
+45 38 4d 46  'FM8E' as a little-endian u32
+cf 00 00 00  0xcf
+bc 23 00 00  0x23bc
+07 00 00 00  'default'          <- length-prefixed ASCII, u32 length
+07 00 00 00  'default'
+07 00 00 00  'default'
+07 00 00 00  'default'
+00 00 00 3f  0.5f  as BIG-endian
+00 00 80 3f  1.0f
+00 00 a0 41  20.0f
+```
+
+Two facts worth pinning down, both measured:
+
+* **u32 fields are little-endian** (`'FM8E'` -> `45 38 4d 46`).
+* **f32 fields are big-endian** (`0.5f` -> `00 00 00 3f`, `20.0f` -> `00 00 a0 41`).
+  `Stream::writeF32` byte-swaps whenever the stream's byte-order flag is not 1,
+  and this stream has it set; `writeU32` in this build does not swap.
+
+The plaintext for one program is **3172 bytes**, buffer capacity 0x2000.
+
+## The file is the compressed form of that plaintext
+
+Same patch, plaintext vs file, aligned at the `prst` chunk:
+
+```
+plain  cf 00 00 00 | bc 23 00 00 | 07 00 00 00 | 'default' | 07 ...
+file   cf 20 0b 04 | bc 23 00 00 | 07 20 07 06 | 'default' | e0 18 0a ...
+```
+
+So the container really does wrap a codec, and the codec is the only thing left.
+
+## Where the codec is applied
+
+Caller of `FM8Program::write` (return address RVA **0x2e4c4e**, function at file
+0x2e3f60) shows the envelope:
+
+```
+if mode == 0:  writeChunkOfType('prst', stream)          ; vtable +0x128
+if mode == 1:
+    enumerateChunkTypes(&vec)                            ; vtable +0x120
+    writeU32(stream, vec.size())
+    for id in vec:
+        CompressedStream::initStorage(name, 0x2000, storage)   ; RVA 0x89c9f0
+        writeChunkOfType(id, &compressedStream)                 ; method = 3
+        writeU32(stream, id)
+        writeRaw(stream, compressedBytes, size)
+```
+
+`writeChunkOfType` is at **RVA 0xf8b70** (file 0xf7f70); its dispatch compares
+the id against `'edit'`, `'guis'`, `'intc'`, `'prst'` (as immediates 0x65646974,
+0x67756973, 0x696e7463, 0x70727374).
+
+So: `CompressedStream` with **method 3** produces the 5:1 reduction. The Mac
+symbols name the pieces (`NI::GP::CompressedMemoryStream::init`,
+`CompressedStorage::setCompressionMethod`, `beginBlock`, `finishBlock`), and
+`ZLibStorage` is *not* involved — no zlib call site is reachable from here.
+
+## Next step (short and concrete)
+
+Break on `CompressedStream::write` / `finishBlock` while the host is in this
+path, and single-step the encoder with the 3172-byte plaintext as a known input.
+Because the plaintext is now fully known, the codec can also be derived offline
+by aligning the two byte streams — either way the remaining unknown is a single
+function.
