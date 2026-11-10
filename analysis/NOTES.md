@@ -724,3 +724,32 @@ Combined with the codec result, the whole chain closes:
 
 so the only per-save variance in the container is the UUID, which is expected and
 masked in comparisons.
+
+
+---
+
+# Full encoding sweep (all 1030 field parameters)
+
+One host sweep per parameter (0..1 in eighths), then every entry was validated by
+reconstructing the stored bytes at all nine sample points. Nothing is fitted
+loosely: an entry is accepted only if the model reproduces the observation exactly.
+
+| model | count | meaning |
+|---|---|---|
+| `f32` | 437 | LE float32, value = `a + b*v` |
+| `u8` | 489 | LE byte, value = `round(a + b*v) mod 256` |
+| `enum2..9` | 104 | N distinct stored byte values |
+
+The `f32` class is `quantised`: the engine rounds the result to an integer before
+storing it. Params 0-20 for example store `-99 + 199*v`, so 0.125 -> -74, not
+-74.125. Reading the same bytes as a *byte* gives the misleading 198/148/68/192
+sequence seen earlier, which is why the first pass looked like a packed bitfield.
+
+Common `u8` slopes: 100.0 (393 params - a percentage), 1.0 (59 - a raw index),
+31.0 (36), 8.0 (1).
+
+The 104 enums are genuine discrete parameters (switches, selectors, and the
+0x00/0x80 booleans). Nine-valued bytes remain the least understood group and are
+stored as measured value tables.
+
+Results in [`../data/param_schema.json`](../data/param_schema.json).
