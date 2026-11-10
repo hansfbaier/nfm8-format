@@ -1,5 +1,13 @@
 {
 "about": "VST parameter -> FM8E payload field plus measured transfer function. Validated by reconstructing stored bytes at nine sweep points (0..1 in eighths) and re-checked out of sample at v=0.9. Measurements only; no Native Instruments code or data.",
+"validation": {
+"in_sample": "9/9 sweep points reconstructed for every entry",
+"out_of_sample_v0.9": {
+"exact": 976,
+"wrong": 44,
+"skipped_enums": 10
+}
+},
 "encodings": {
 "f32": "LE float32, value = a + b*v, rounded when quantised",
 "uN": "LE integer of N*8 bits, round(a + b*v) mod 2^N (wraps when a signed field crosses the modulus)",
