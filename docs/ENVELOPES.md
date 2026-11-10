@@ -488,21 +488,31 @@ and the decoded `Whitty_Lead_` example.
 
 ## 13. Limitations / open items
 
-* **Writing.**  Same-size edits (values and flags, no breakpoint-count change)
-  are implemented and validated through FM8's `effSetChunk`.  Breakpoint-count
-  resizing is implemented (`resize=True`) but experimental: FM8 1.7.14 reverted
-  resized envelopes to the default shape in testing, so verify before using it.
-* **Scaling semantics.**  The two nine-record runs after the slopes are exposed
-  raw.  Their exact mapping to the GUI's `Key Scaling` / `Vel Scaling` curves is
-  inferred, not proven.
-* **X/Z sentinel data.**  Unused X/Z envelopes can contain sentinel or
-  uninitialised-looking time floats.  The decoder flags them; it does not sanitise them.
-* **Breakpoints are not VST parameters.**  Completing the VST parameter schema
+* **Resizing breakpoint counts.** Same-size writes (values and flags) are
+  implemented and validated through FM8's `effSetChunk`.  `resize=True` builds a
+  correct resized stream, but FM8 1.7.14 truncated resized envelopes to the old
+  point count in testing; the state field FM8 uses for the count is not
+  identified.  Treat resizing as experimental.
+* **Keyscale writer.** The decoder exposes keyscale pitch/level/slope; writing
+  those curves back is not implemented.
+* **Remaining Env-page fields.** `P.Env`, `Loop` and `Rel` are decoded.  `Mode`
+  (`SLD`), `Sus`, `Tempo Sync` and the keyscale/velocity scaling *amounts* are
+  not all exposed by the envelope API; the amounts are VST parameters 602–619.
+* **GUI keyscale readback.** The pitch/level/slope mapping is derived from the
+  macOS `KeyScaleTags` symbols and the stored values, not from a GUI KeySc-page
+  log.
+* **1.7.4 parameter layout.** Envelope decoding works on the old factory files,
+  but the `layout=True` schema shift is validated systematically only on
+  1.7.8/1.7.14 files.
+* **X/Z sentinel data.** Unused X/Z envelopes can contain sentinel or
+  uninitialised-looking time floats.  The decoder flags them; it does not
+  sanitise them.
+* **Breakpoints are not VST parameters.** Completing the VST parameter schema
   will not expose them, and they cannot be set with `effSetParameter`.
-* **Future versions.**  The anchors are validated per file and the decoder falls
+* **Future versions.** The anchors are validated per file and the decoder falls
   back to a structural scan, but a future FM8 version could change the record
   grammar or the header-relative offset.
-* **Filter/LFO envelopes.**  The nine destinations are the operator/filter/pitch
+* **Filter/LFO envelopes.** The nine destinations are the operator/filter/pitch
   envelopes shown on Expert → Env.  LFO shapes and other modulation curves are
   not decoded here.
 
