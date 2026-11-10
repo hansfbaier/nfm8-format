@@ -466,3 +466,28 @@ tools/fm8_oracle.py  ->  gdb script: break at base+0xf8c40, dump [storage+0x20]
 Set a hardware watchpoint on the decompression buffer found at `readChunkOfType`
 and let the decoder write it, which drops the PC straight into the decoder; the
 pair above then only has to confirm the reading.
+
+
+### Correction: there is no separate compression codec
+
+The decompressed image does **not** contain `hsin`/`DSIN`, while the file region
+does. So the 753-byte file region is not a compressed copy of the 3825-byte
+image; the two are different representations of the same data:
+
+```
+FM8Program::write            -> 3171 byte program payload ('FM8E', 0xcf, 0x23bc,
+                                4 strings, then big-endian floats)
+writeRaw into a memory stream -> chunk list: 'tsrp' + payload, 'ctni', 'siug'
+                                 (3171 + 17 + 537 + headers = 3825 bytes)
+item-tree writer              -> packs that chunk list into the hsin/DSIN tree
+                                 (753 bytes in the file)
+```
+
+Measured chunk offsets in the decompressed image: `tsrp` at 0x0c, `ctni` at
+0xc98, `siug` at 0xebd, total 3825. The item tree in the file is the bit-packed
+form of exactly this, which is why the 5:1 ratio appears and why no zlib/LZ4/LZSS
+decoder fits: the reduction comes from packing typed values (mostly floats and
+zero runs), not from a general purpose compressor.
+
+That reframes the last open question: it is the item tree's *value packing*, the
+same format the hsin/DSIN nodes already show, not a standalone codec.
