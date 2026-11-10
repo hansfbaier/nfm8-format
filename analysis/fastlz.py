@@ -101,3 +101,84 @@ if __name__ == '__main__':
     for b in blocks:
         dec = decompress_block(data, b)
         print('  block %#x -> %d bytes, head %s' % (b, len(dec), dec[:16].hex(' ')))
+
+
+# --------------------------------------------------------------------------
+# Level-1 compressor (FastLZ reference algorithm)
+# --------------------------------------------------------------------------
+HASH_LOG = 13
+HASH_SIZE = 1 << HASH_LOG
+MAX_COPY = 32
+MAX_DISTANCE = 8191
+
+
+def _hash(v):
+    return ((v * 2654435769) & 0xffffffff) >> (32 - HASH_LOG)
+
+
+def _read32(buf, i):
+    return buf[i] | (buf[i + 1] << 8) | (buf[i + 2] << 16) | (buf[i + 3] << 24)
+
+
+def _literals(out, src, start, runs):
+    i = start
+    while runs >= MAX_COPY:
+        out.append(MAX_COPY - 1)
+        out += src[i:i + MAX_COPY]
+        i += MAX_COPY
+        runs -= MAX_COPY
+    if runs > 0:
+        out.append(runs - 1)
+        out += src[i:i + runs]
+        i += runs
+    return i
+
+
+def _match(out, length, distance):
+    length -= 3
+    if length < 7:
+        out.append((length << 5) | (distance >> 8))
+        out.append(distance & 0xFF)
+    else:
+        out.append((7 << 5) | (distance >> 8))
+        out.append(length - 7)
+        out.append(distance & 0xFF)
+
+
+def compress(src, level=1):
+    """FastLZ level-1 compressor.  Emits [run][literals] and [token][offset]."""
+    n = len(src)
+    if n < 4:
+        return None
+    ip_limit = n - 12
+    ip_bound = n - 4
+    htab = [0] * HASH_SIZE
+    out = bytearray()
+    ip = 0
+    anchor = 0
+    while ip < ip_limit:
+        hval = _read32(src, ip)
+        h = _hash(hval)
+        ref = htab[h]
+        htab[h] = ip
+        distance = ip - ref - 1
+        if ref < ip and distance < MAX_DISTANCE and _read32(src, ref) == hval:
+            if anchor < ip:
+                _literals(out, src, anchor, ip - anchor)
+            ip += 3
+            ref += 3
+            while ip < ip_bound and (ip - anchor) < 264 and src[ip] == src[ref]:
+                ip += 1
+                ref += 1
+            _match(out, ip - anchor, distance)
+            anchor = ip
+            if ip < ip_limit:
+                htab[_hash(_read32(src, ip - 2))] = ip - 2
+                htab[_hash(_read32(src, ip - 1))] = ip - 1
+        else:
+            ip += 1
+    if anchor < n:
+        _literals(out, src, anchor, n - anchor)
+    return bytes(out)
+
+
