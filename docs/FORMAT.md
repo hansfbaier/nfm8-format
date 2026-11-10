@@ -267,6 +267,24 @@ bytes — and check whether the two chunks differ by a whole number of bytes ove
 the entire remaining stream.  If yes, tokens are byte-aligned and a length byte
 exists.  If no, the stream is bit-packed and `nfm8` needs a bit-level parser.
 
+### 5.2 Measured coupling: one parameter perturbs the whole stream
+
+Before writing an encoder it is worth knowing how tightly the stream is coupled.
+Measurement: for each of the 1094 parameters, set it to 0.25 / 0.5 / 0.75 on a
+clean baseline, dump the state, and diff the parameter stream (3261
+measurements; raw summary `data/param_stream_effects.json`).
+
+* **0 of 3261** changes produced a localized diff (defined as span <= 12 bytes).
+* **3149 of 3261** diffs ran all the way to the end of the stream.
+* median diff span: **602 bytes** in a stream of ~755 bytes.
+
+Consequence: there is no "byte offset per parameter" table to be found.  Any
+change moves the tail of the stream, so a reader must parse the stream
+sequentially with an exact framing model and cannot skip or resynchronise.  One
+wrong length anywhere invalidates everything after it.  This is why the framing
+question in §5.1 is the gate for the whole project, and why a partial decoder
+(one that guesses lengths) is not worth shipping.
+
 ### 5.2 What a DLL-free tool needs
 
 A tool that reads and writes patches without `FM8.dll` must know, per parameter:

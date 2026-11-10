@@ -26,6 +26,36 @@ python tools/compare_states.py authored_params.json from_fm8.bin   # must be 0 d
 * 1094 VST parameters with names; the parameter names are stable text, so the
   schema can be keyed by name rather than by index.
 
+## Blocker (measured, not assumed)
+
+Collection pass done: 1094 params x 3 values, 3261 usable measurements
+(`data/param_stream_effects.json`).  Result: **every** single-parameter change
+perturbs the rest of the stream — 0/3261 diffs were localized (<= 12 bytes),
+3149/3261 ran to end-of-stream, median span 602 bytes of a ~755-byte stream.
+
+So the schema cannot be recovered as "parameter -> byte offset".  It requires an
+exact sequential framing model first.  That model is the blocker; everything in
+the pipeline below is cheap once it exists.
+
+Two ways to attack the framing, both with real costs:
+
+* **A. Black-box, longer campaign.** Needs a solver over candidate grammars
+  constrained by hundreds of baseline streams plus single-parameter pairs
+  (a valid grammar must parse every stream exactly and change exactly one token
+  per single-parameter edit).  Open-ended: hours to days, no guarantee, because
+  the stream also contains forward references (see note below) which make simple
+  greedy parsers invalid.
+* **B. Static analysis of `FM8.exe` / `FM8.dll`.** Fast and definitive, but it is
+  disassembly of a proprietary binary — the opposite of the black-box approach
+  used so far, and a decision the project owner must make, not me.
+
+Note that pushes towards (B) or at least complicates (A): the stream contains
+reversed ASCII (`knab`, `tsrpE8MF`, `ctniL`, `siug`) next to normal ASCII
+(`default`), and length-like fields that change when the stream grows
+(`e0 4b` -> `e0 45` for a +6 byte change).  Fields that encode sizes of things
+that come *later* mean the serializer writes forward references, i.e. it may be
+a two-pass format where sizes are patched in.  A decoder has to model that.
+
 ## Open problems, hardest first
 
 1. **Token framing.** Determine exactly how a value plus its bit-length header

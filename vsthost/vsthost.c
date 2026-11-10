@@ -192,6 +192,15 @@ int main(int argc, char **argv)
     fx->dispatcher(fx, effSetBlockSize, 0, 512, NULL, 0);
     fx->dispatcher(fx, effMainsChanged, 0, 1, NULL, 0);
 
+    /* FM8 only starts honouring effSetParameter after it has parsed a state
+     * chunk once, so prime it with its own initial chunk. */
+    {
+        void *primed = NULL; intptr_t plen = 0;
+        plen = fx->dispatcher(fx, effGetChunk, 0, 0, &primed, 0);
+        if (plen > 0)
+            fx->dispatcher(fx, effSetChunk, 0, plen, primed, 0);
+    }
+
     const char *cmd = argv[2];
 
     if (!strcmp(cmd, "chunk") && argc >= 4) {
@@ -234,18 +243,11 @@ int main(int argc, char **argv)
             fx->setParameter(fx, i, v);
             /* run audio to let the engine apply the parameter */
             commitParams(fx, 2);
-            /* two consecutive dumps: GUID noise differs, param bytes are stable */
             void *b2 = NULL; intptr_t l2 = 0;
             l2 = fx->dispatcher(fx, effGetChunk, 0, 0, &b2, 0);
             if (l2 > 0) {
-                snprintf(path, sizeof(path), "%s/param_%04d_a.bin", outdir, i);
+                snprintf(path, sizeof(path), "%s/param_%04d.bin", outdir, i);
                 saveFile(path, b2, l2);
-            }
-            void *b3 = NULL; intptr_t l3 = 0;
-            l3 = fx->dispatcher(fx, effGetChunk, 0, 0, &b3, 0);
-            if (l3 > 0) {
-                snprintf(path, sizeof(path), "%s/param_%04d_b.bin", outdir, i);
-                saveFile(path, b3, l3);
             }
             if (i % 100 == 0) printf("scanned %d\n", i);
         }
