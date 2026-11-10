@@ -7,15 +7,20 @@ verification oracle.
 > **Project goal:** a tool that reads *and writes* every synth parameter with **no
 > FM8 installed** — `FM8.dll` used only as a development oracle.
 >
-> **Status:** the format is decoded end to end. The container, the encryption
-> item and the payload codec are all solved, and the codec is bidirectional:
-> every FastLZ block in the library decompresses and re-compresses back to the
-> identical stored bytes (`python tools/check_codec.py <dir>`). The mapping from
-> VST parameter to payload field is measured for all 1094 parameters
-> ([`data/param_schema.json`](data/param_schema.json)) and the value encodings are
-> partly classified ([`data/param_curves.json`](data/param_curves.json)). What is
-> left is finishing the value encodings for every integer field; the plan is in
-> [docs/PLAN.md](docs/PLAN.md).
+> **Status:** the format is decoded end to end and the tool writes parameters
+> without the plugin. The container, the encryption item and the payload codec
+> are all solved, and the codec is bidirectional: every FastLZ block in a library
+> decompresses and re-compresses back to the identical stored bytes
+> (`python tools/check_codec.py <dir>`, 1099/1099 streams so far).
+> `fm8param.Patch` reads and writes parameters directly: a file written by this
+> tool is accepted by FM8, and the parameter payload FM8 returns is byte-identical
+> (only the 16-byte UUIDs FM8 regenerates on every save differ).
+>
+> Coverage: all 1030 locatable parameters have a measured offset and transfer
+> function in [`data/param_schema.json`](data/param_schema.json); 976 of them
+> reproduce an unseen value exactly. The remaining 44 are integer-valued floats
+> where FM8's rounding and ours disagree by one step, plus 10 discrete fields with
+> no closed form. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Why this exists
 
@@ -95,6 +100,23 @@ p.save('tagged.nfm8')
 `vsthost/` is a ~400 line VST2 host for Windows that loads `FM8.dll`, dumps /
 loads state chunks and sweeps parameters. It needs an **installed, licensed**
 FM8 — nothing of NI's is redistributed here.
+
+## Licensing and scope
+
+Everything in this repository is original work: the parser, the codec, the host
+and the measurements. No Native Instruments source, no disassembly listings, no
+factory presets and no binaries are included or redistributed.
+
+* **FastLZ** is a public format by Ariya Hidayat (MIT). `analysis/fastlz.py` is an
+  independent implementation written from the published format and from the byte
+  streams FM8 emits, so the tool stays binary-free.
+* **`data/params.txt`** lists the 1094 automatable parameter names the plugin
+  reports. They are interface identifiers, the minimum needed to talk to a patch
+  in a way a user can recognise, in the same sense as an API surface.
+* **`data/param_schema.json`** and the other `data/` files are measurements taken
+  on the author's own licensed copy — offsets and coefficients, not vendor data.
+* You still need your own licensed FM8 to make the audio, and NI's licence
+  applies to patches you create with it.
 
 ```bash
 cd vsthost && make            # or: gcc -O2 -std=c11 -o vsthost.exe vsthost.c -s
