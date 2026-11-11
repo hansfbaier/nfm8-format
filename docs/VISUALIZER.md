@@ -15,7 +15,7 @@ python fm8svg.py patch.nfm8 --title "My patch"
 |---|---|---|
 | Header | name, author, comment, version, file, route/point counts | identifies the patch and how much structure it has |
 | Operators | waveform, ratio, offset, output, P/S/R/TS flags | the raw oscillator settings that the matrix modulates |
-| FM matrix | FM8-style diagonal labels (A–F, X, Z, IN), 9×9 cells, four TL/TR/BL/BR quadrants, OUT row, optional PAN strip | the actual modulation topology, including output and pan |
+| FM matrix | FM8-style diagonal labels (A–F, X, Z, IN), 9×9 cells, rows = destinations, columns = sources, one BL value per cell, hover for all TL/TR/BL/BR values, OUT row, optional PAN strip | the actual modulation topology, including output and pan |
 | Envelopes | all nine destinations, absolute time, levels, slopes, flags, K/V amounts | timing and shape of every operator/filter/pitch envelope |
 | Key scaling | pitch, level and slope curves per destination | how the envelope changes across the keyboard |
 | Voice | filter, noise, saturation, master/input/transpose, unison, portamento | the post-matrix timbre and play mode |
@@ -29,8 +29,12 @@ the modulation is.  An envelope panel alone says *how an envelope moves*, but
 not *where it is routed*.  The datasheet puts the two next to each other and
 adds the settings that are neither matrix nor envelope:
 
-* **four quadrants per matrix cell** — the FM8 matrix stores four values per
-  source/destination pair.  Showing one number would hide most of the routing.
+* **four values per matrix cell** — the FM8 matrix stores four values per
+  source/destination pair, but its display shows the BL value.  The chart
+  matches that view and keeps all four values in the hover text.
+* **destination rows, source columns** — a source feeding a later operator is
+  below the diagonal; a source feeding an earlier operator is above it.  This
+  is the orientation FM8 uses.
 * **OUT and PAN** — output level is a matrix destination, and the pan law is a
   separate bipolar destination.  OUT is drawn as FM8's bottom strip; PAN is
   shown as a slim extra strip only when the patch uses it.
@@ -49,8 +53,9 @@ adds the settings that are neither matrix nor envelope:
 ## Accuracy and limitations
 
 * The matrix uses FM8's diagonal-label layout rather than row/column headers.
-  Off-diagonal cells show four values; diagonal cells carry the operator labels
-  and show self-route dots.
+  Rows are destinations and columns are sources; off-diagonal cells show the BL
+  value, and diagonal cells carry the operator labels and their self-route
+  value.
 * Matrix fields are decoded from the stored bytes: standard cells are shown as
   signed values, `OUT` as 0..100, and `PAN` as a bipolar value.
 * The operator table shows the **BL** quadrant as the primary value.  An
