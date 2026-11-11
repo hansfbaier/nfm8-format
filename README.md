@@ -136,7 +136,8 @@ standard library. It is laid out as an FM8-style datasheet:
 * **operators** — waveform, ratio, offset, output level and P/S/R/TS flags for
   A–F, plus the filter/pitch destinations;
 * **FM matrix** — FM8-style colored diagonal operator labels (A–F, X, Z, IN),
-  a self-modulation cell above every label, one BL value per route cell,
+  a centered self-modulation cell above every label with a plain vertical
+  connector and loop arrow when nonzero, one BL value per route cell,
   straight source spokes, arrowheads only where a route enters an operator,
   an OUT row, and a slim PAN strip when the patch uses pan routing. Rows are
   destinations and columns are sources, so a source

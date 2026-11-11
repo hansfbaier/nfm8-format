@@ -571,7 +571,7 @@ def matrix_self_cell(x, y, w, h, value, color, tip):
     out = [rect(x, y, w, h, "#142235", GRID, 1)]
     if value:
         out.append(rect(x + 1, y + 1, w - 2, h - 2, color, "none", 0, 0.32))
-        out.append(text(x + w / 2, y + h - 2, str(int(value)),
+        out.append(text(x + w / 2, y + h / 2 + 2.3, str(int(value)),
                         6.8, "#f2fbff", "700", "middle"))
     out.append(f"<g>{title_node(tip)}</g>")
     return "".join(out)
@@ -634,14 +634,14 @@ def render_matrix(x, y, w, h, patch, cells):
     # self-modulation cell lives in that band.
     for i, dest in enumerate(SRC_ORDER):
         row_top = gy + i * pitch
-        label_y = row_top + gap + 1
+        label_y = row_top + gap + 2
         label_cy = label_y + (size - 2) / 2
         self_vals = matrix_cell(patch, cells, dest, dest)
         self_bl = self_vals["BL"] if self_vals else 0
         self_tip = f"{dest} self\n" + (
             "  ".join(f"{q} {self_vals[q]:+d}" for q in QUADS) if self_vals else "no route field")
         out.append(matrix_self_cell(gx + i * size + 1, row_top + 1,
-                                    size - 2, gap - 2, self_bl,
+                                    size - 2, gap - 6, self_bl,
                                     destination_color(dest), self_tip))
         for j, src in enumerate(SRC_ORDER):
             vals = matrix_cell(patch, cells, src, dest)
@@ -673,7 +673,7 @@ def render_matrix(x, y, w, h, patch, cells):
     for i, src in enumerate(SRC_ORDER):
         xc = gx + i * size + size / 2
         row_top = gy + i * pitch
-        label_top = row_top + gap + 1
+        label_top = row_top + gap + 2
         label_bottom = label_top + size - 2
         up = []
         down = []
@@ -697,7 +697,8 @@ def render_matrix(x, y, w, h, patch, cells):
         if down:
             out.append(line(xc, label_bottom, xc, max(down), color, 1.0, 0.45))
 
-    # Self-modulation loop arrows: the self cell feeds back into the operator.
+    # Self modulation: loop out of the self cell and back into the operator,
+    # with the arrowhead on the operator edge.
     for i, src in enumerate(SRC_ORDER):
         self_vals = matrix_cell(patch, cells, src, src)
         if not (self_vals and self_vals["BL"]):
@@ -705,11 +706,14 @@ def render_matrix(x, y, w, h, patch, cells):
         row_top = gy + i * pitch
         sx = gx + i * size + 1
         sy = row_top + 1
-        sw, sh = size - 2, gap - 2
+        sw, sh = size - 2, gap - 6
         label_right = gx + (i + 1) * size - 1
-        label_mid = row_top + gap + 1 + (size - 2) / 2
+        label_mid = row_top + gap + 2 + (size - 2) / 2
         loop_x = label_right + 8
         color = "#cfe8ff"
+        label_top = row_top + gap + 2
+        out.append(line(sx + sw / 2, sy + sh, sx + sw / 2, label_top,
+                        color, 1.0, 0.75))
         out.append(f'<path d="M {sx + sw:.1f} {sy + sh / 2:.1f} '
                    f'H {loop_x:.1f} V {label_mid:.1f} H {label_right - 1:.1f}" '
                    f'fill="none" stroke="{color}" stroke-width="1" '

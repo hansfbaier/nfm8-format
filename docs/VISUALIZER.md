@@ -35,10 +35,11 @@ adds the settings that are neither matrix nor envelope:
 * **destination rows, source columns** — a source feeding a later operator is
   below the diagonal; a source feeding an earlier operator is above it.  This
   is the orientation FM8 uses.
-* **self cells and arrows** — every operator label has a self-modulation cell
-  above it.  Source-to-cell and source-to-OUT spokes are straight lines; only
-  the final edge into a destination operator label carries an arrowhead, as in
-  FM8.
+* **self cells and arrows** — every operator label has a vertically centered
+  self-modulation cell above it.  A nonzero self value gets a plain vertical
+  connector to the operator plus a loop arrow into the operator label.  Source-to-cell and source-to-OUT spokes are
+  straight lines; only the final edge into a destination operator label carries
+  an arrowhead, as in FM8.
 * **OUT and PAN** — output level is a matrix destination, and the pan law is a
   separate bipolar destination.  OUT is drawn as FM8's bottom strip; PAN is
   shown as a slim extra strip only when the patch uses it.
@@ -59,7 +60,9 @@ adds the settings that are neither matrix nor envelope:
 * The matrix uses FM8's diagonal-label layout rather than row/column headers.
   Rows are destinations and columns are sources; off-diagonal cells show the BL
   value, diagonal cells carry the colored operator labels, and the small cell
-  above each label is its self-modulation route.
+  above each label is its vertically centered self-modulation route.  A
+  nonzero self value gets a plain vertical connector and a loop arrow into the
+  operator.
 * Matrix fields are decoded from the stored bytes: standard cells are shown as
   signed values, `OUT` as 0..100, and `PAN` as a bipolar value.
 * The operator table shows the **BL** quadrant as the primary value.  An
