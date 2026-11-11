@@ -35,6 +35,15 @@ verification oracle.
 > for the specification, worked example and validation; the former open handoff
 > is now [`docs/ENVELOPES_HANDOFF.md`](docs/ENVELOPES_HANDOFF.md).
 
+## Example output
+
+This is [`examples/test.nfm8`](examples/test.nfm8) rendered with
+`fm8svg.py`:
+
+[![FM8 test patch visualization](examples/test.svg)](examples/test.svg)
+
+See [Visualize a patch](#visualize-a-patch) for the panel legend and limitations.
+
 ## Why this exists
 
 `.nfm8` has no public specification. I wanted to script patch metadata (names,
@@ -176,12 +185,6 @@ breakpoint numbers are in the hover text and in `fm8env.py`. Effect on/off
 fields that are not in the measured parameter schema (currently Phaser, Flanger
 and Tremolo) are shown as `?`. See [`docs/VISUALIZER.md`](docs/VISUALIZER.md)
 for the layout and limitations.
-
-### Example
-
-[`examples/test.nfm8`](examples/test.nfm8) rendered with the tool:
-
-[![FM8 test patch visualization](examples/test.svg)](examples/test.svg)
 
 As a library:
 
