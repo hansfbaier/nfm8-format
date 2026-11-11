@@ -144,8 +144,9 @@ standard library. It is laid out as an FM8-style datasheet:
   feeding a later operator appears below the diagonal and a source feeding an
   earlier operator appears above it; hover for all four TL/TR/BL/BR values;
 * **breakpoint envelopes** — all nine destinations, with absolute-time axes,
-  every breakpoint time marked on the time axis, handles (hover for
-  time/level/slope) and sustain/release flags;
+  an implicit attack from time zero to the first breakpoint, every breakpoint
+  time marked on the axis, handles (hover for time/level/slope) and
+  sustain/release flags;
 * **key scaling** — compact pitch, level and slope curves for every destination;
 * **voice context** — filter/noise/saturation, global pitch/unison/portamento,
   both LFOs, the arpeggiator, and the effect rack with on/off and mix.

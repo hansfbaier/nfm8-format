@@ -778,14 +778,28 @@ def envelope_points(env, x0, y0, w, h, tmax):
     pts = []
     if not times:
         return pts
+    # The first stored time is absolute.  If it is greater than zero, the
+    # envelope has an implicit attack segment from (0, 0) to that first point.
+    if (math.isfinite(times[0]) and times[0] > 0
+            and levels and levels[0] > 0.0005):
+        x1 = x0 + clamp(times[0] / tmax, 0, 1) * w
+        y1 = y0 + (1.0 - clamp(levels[0], 0, 1)) * h
+        slope = clamp(env.slopes[0] if env.slopes else 0.5, 0, 1)
+        gamma = 2.0 ** ((slope - 0.5) * 4.0)
+        n = max(2, int(28 * abs(x1 - x0) / max(w, 1)) + 2)
+        for k in range(0, n + 1):
+            f = k / n
+            ff = f ** gamma
+            pts.append((x0 + (x1 - x0) * f, (y0 + h) + (y1 - (y0 + h)) * ff))
     for i in range(len(times)):
         t = times[i]
         if not math.isfinite(t) or t < 0:
             continue
         x = x0 + clamp(t / tmax, 0, 1) * w
         y = y0 + (1.0 - clamp(levels[i] if i < len(levels) else 0, 0, 1)) * h
-        if not pts or i == 0:
-            pts.append((x, y))
+        if i == 0:
+            if not pts or pts[-1] != (x, y):
+                pts.append((x, y))
             continue
         t0 = times[i - 1]
         l0 = levels[i - 1] if i - 1 < len(levels) else 0
