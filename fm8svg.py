@@ -780,10 +780,10 @@ def envelope_points(env, x0, y0, w, h, tmax):
         return pts
     # The first stored time is absolute.  If it is greater than zero, the
     # envelope has an implicit attack segment from (0, 0) to that first point.
-    if (math.isfinite(times[0]) and times[0] > 0
-            and levels and levels[0] > 0.0005):
+    if math.isfinite(times[0]) and times[0] > 0:
         x1 = x0 + clamp(times[0] / tmax, 0, 1) * w
-        y1 = y0 + (1.0 - clamp(levels[0], 0, 1)) * h
+        first_level = levels[0] if levels else 0.0
+        y1 = y0 + (1.0 - clamp(first_level, 0, 1)) * h
         slope = clamp(env.slopes[0] if env.slopes else 0.5, 0, 1)
         # An attack rises from zero; its curvature is the mirror image of the
         # decay segments, so invert the slope exponent for this first segment.
