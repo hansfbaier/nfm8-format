@@ -122,6 +122,47 @@ print(p.keyscales()['pitch']['A'])  # keyscale pitch curve
 print(p.get(178, layout=True))  # schema field after the variable envelope block
 ```
 
+## Visualize a patch
+
+```bash
+python fm8svg.py MyPatch.nfm8 -o MyPatch.svg
+python fm8svg.py MyPatch.nfm8 --title "Bass patch"
+```
+
+The SVG is self-contained and needs no FM8 or Python package beyond the
+standard library. It is laid out as an FM8-style datasheet:
+
+* **header** — name, author, comment, version, file, active routes/points;
+* **operators** — waveform, ratio, offset, output level and P/S/R/TS flags for
+  A–F, plus the filter/pitch destinations;
+* **FM matrix** — all nine sources × nine destinations with four independent
+  TL/TR/BL/BR quadrants, an OUT row and a PAN column;
+* **breakpoint envelopes** — all nine destinations, with absolute-time axes,
+  breakpoint handles (hover for time/level/slope) and sustain/release flags;
+* **key scaling** — compact pitch, level and slope curves for every destination;
+* **voice context** — filter/noise/saturation, global pitch/unison/portamento,
+  both LFOs, the arpeggiator, and the effect rack with on/off and mix.
+
+Important details that are easy to miss when looking only at a matrix or only
+at envelope curves:
+
+* matrix cells are **four-quadrant** values, not one number;
+* `OUT` is the source-to-output level and `PAN` is a separate bipolar matrix;
+* envelope times are **absolute after the first delta**, and the last
+  breakpoint is the release/sustain end point;
+* `P` is the pitch-envelope destination, `X`/`Z` are the filter destinations,
+  and `I` is the audio input;
+* key scaling is a separate curve set from the breakpoint envelope;
+* velocity scaling is a single amount, not a curve;
+* the filter, LFOs, arpeggiator and effects can change the sound as much as the
+  operator matrix.
+
+Curve shapes are an approximation from the stored slope values; the exact
+breakpoint numbers are in the hover text and in `fm8env.py`. Effect on/off
+fields that are not in the measured parameter schema (currently Phaser, Flanger
+and Tremolo) are shown as `?`. See [`docs/VISUALIZER.md`](docs/VISUALIZER.md)
+for the layout and limitations.
+
 As a library:
 
 ```python
