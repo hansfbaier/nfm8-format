@@ -44,7 +44,7 @@ except Exception:  # pragma: no cover - only if the module is moved alone
 # ---------------------------------------------------------------------------
 
 W = 1640
-H = 1400
+H = 1460
 M = 24
 
 BG = "#0a121d"
@@ -532,6 +532,25 @@ def render_operators(x, y, w, h, patch, cells, envs):
     return "".join(out)
 
 
+def arrow_svg(x1, y1, x2, y2, color="#cfe8ff"):
+    """Thin arrow used for matrix modulation direction."""
+    dx, dy = x2 - x1, y2 - y1
+    length = math.hypot(dx, dy)
+    if length < 2:
+        return ""
+    ux, uy = dx / length, dy / length
+    head = 6.0
+    px, py = x2, y2
+    bx, by = x2 - head * ux, y2 - head * uy
+    points = (f"{px:.1f},{py:.1f} "
+              f"{bx + 3.0 * uy:.1f},{by - 3.0 * ux:.1f} "
+              f"{bx - 3.0 * uy:.1f},{by + 3.0 * ux:.1f}")
+    return "".join([
+        line(x1, y1, x2 - head * 0.8 * ux, y2 - head * 0.8 * uy, color, 1.0, 0.75),
+        f'<polygon points="{points}" fill="{color}" fill-opacity="0.75"/>',
+    ])
+
+
 def matrix_route_cell(x, y, size, value, tip):
     """One cell of the FM8 display: a single BL modulation value."""
     out = [rect(x, y, size, size, "#101c2a", GRID_SOFT, 0)]
@@ -547,17 +566,24 @@ def matrix_route_cell(x, y, size, value, tip):
     return "".join(out)
 
 
-def matrix_diagonal_svg(x, y, size, self_value, tip):
-    """Diagonal cell: the FM8 operator label area, plus its self-route value."""
-    out = [rect(x, y, size, size, "#142235", GRID_SOFT, 0)]
-    if self_value:
-        color = "#3b8fb3" if self_value >= 0 else "#a45d2b"
-        out.append(text(x + 5, y + 12, str(int(self_value)),
-                        6.8, "#d8ecff" if self_value >= 0 else "#ffbd86",
-                        "700"))
-    out.append(rect(x, y, size, size, "none", GRID, 1))
+def matrix_self_cell(x, y, w, h, value, color, tip):
+    """The small self-modulation cell above an operator label."""
+    out = [rect(x, y, w, h, "#142235", GRID, 1)]
+    if value:
+        out.append(rect(x + 1, y + 1, w - 2, h - 2, color, "none", 0, 0.32))
+        out.append(text(x + w / 2, y + h - 2, str(int(value)),
+                        6.8, "#f2fbff", "700", "middle"))
     out.append(f"<g>{title_node(tip)}</g>")
     return "".join(out)
+
+
+def matrix_diagonal_svg(x, y, size, tip):
+    """Diagonal label-cell background."""
+    return "".join([
+        rect(x, y, size, size, "#142235", GRID_SOFT, 0),
+        rect(x, y, size, size, "none", GRID, 1),
+        f"<g>{title_node(tip)}</g>",
+    ])
 
 
 def matrix_output_cell(x, y, w, h, value, tip):
@@ -590,36 +616,95 @@ def matrix_pan_cell(x, y, w, h, value, tip):
 def render_matrix(x, y, w, h, patch, cells):
     """FM8-style operator matrix.
 
-    FM8 draws one BL value per source/destination cell and places the operator
-    names on the diagonal.  The other three quadrants are morph variants; they
-    are available in the hover text instead of being drawn as four numbers.
+    Rows are destinations, columns are sources.  Each operator row has a small
+    self-modulation cell above its diagonal label.  Arrows point from a route
+    value toward its destination operator, exactly as in FM8's matrix.
     """
     out = [panel(x, y, w, h),
            section_title(x + 16, y + 24, "FM MATRIX",
-                         "diagonal labels · columns = source · rows = destination · later targets below diagonal")]
-    size = 45
+                         "operator colors · self cell above each label · arrows point to destination · later targets below diagonal")]
+    size = 38
+    gap = 16
+    pitch = size + gap
     gx = x + (w - 9 * size) / 2
     gy = y + 58
+    route_arrows = []
 
-    # Main 9x9 grid.  Rows are destinations, columns are sources: a source
-    # affecting a later operator therefore lands below the diagonal, and a
-    # source affecting an earlier operator lands above it.
+    # Main grid.  Every row has a 12 px band above it; the diagonal operator's
+    # self-modulation cell lives in that band.
     for i, dest in enumerate(SRC_ORDER):
-        ry = gy + i * size
+        row_top = gy + i * pitch
+        label_y = row_top + gap + 1
+        label_cy = label_y + (size - 2) / 2
+        self_vals = matrix_cell(patch, cells, dest, dest)
+        self_bl = self_vals["BL"] if self_vals else 0
+        self_tip = f"{dest} self\n" + (
+            "  ".join(f"{q} {self_vals[q]:+d}" for q in QUADS) if self_vals else "no route field")
+        out.append(matrix_self_cell(gx + i * size + 1, row_top + 1,
+                                    size - 2, gap - 2, self_bl,
+                                    destination_color(dest), self_tip))
         for j, src in enumerate(SRC_ORDER):
             vals = matrix_cell(patch, cells, src, dest)
             bl = vals["BL"] if vals else 0
             tip = f"{src} → {dest}\n" + (
                 "  ".join(f"{q} {vals[q]:+d}" for q in QUADS) if vals else "no route field")
             cx = gx + j * size + 1
-            cy = ry + 1
+            cy = label_y
             if i == j:
-                out.append(matrix_diagonal_svg(cx, cy, size - 2, bl, tip))
+                out.append(matrix_diagonal_svg(cx, cy, size - 2, tip))
             else:
                 out.append(matrix_route_cell(cx, cy, size - 2, bl, tip))
+                if bl:
+                    if j < i:
+                        route_arrows.append((cx + size - 2, label_cy,
+                                             gx + i * size + 1, label_cy))
+                    else:
+                        route_arrows.append((cx, label_cy,
+                                             gx + (i + 1) * size - 1, label_cy))
 
-    # Output strip: one BL value per source, like FM8's bottom row.
-    oy = gy + 9 * size
+    # Modulation arrows, drawn before the labels so the heads sit at the edge.
+    for x1, y1, x2, y2 in route_arrows:
+        out.append(arrow_svg(x1, y1, x2, y2))
+
+    # Self-route loops.
+    for i, dest in enumerate(SRC_ORDER):
+        self_vals = matrix_cell(patch, cells, dest, dest)
+        if not (self_vals and self_vals["BL"]):
+            continue
+        row_top = gy + i * pitch
+        sx = gx + i * size + 1
+        sy = row_top + 1
+        sw, sh = size - 2, gap - 2
+        label_right = gx + (i + 1) * size - 1
+        label_top = row_top + gap + 1
+        label_mid = label_top + (size - 2) / 2
+        loop_x = label_right + 8
+        color = "#cfe8ff"
+        out.append(f'<path d="M {sx + sw:.1f} {sy + sh / 2:.1f} '
+                   f'H {loop_x:.1f} V {label_mid:.1f} H {label_right - 1:.1f}" '
+                   f'fill="none" stroke="{color}" stroke-width="1" '
+                   f'stroke-opacity="0.75"/>')
+        out.append(f'<polygon points="{label_right - 1:.1f},{label_mid:.1f} '
+                   f'{label_right + 5:.1f},{label_mid - 3:.1f} '
+                   f'{label_right + 5:.1f},{label_mid + 3:.1f}" '
+                   f'fill="{color}" fill-opacity="0.75"/>')
+
+    # Colored operator labels on the diagonal.
+    for i, src in enumerate(SRC_ORDER):
+        label = "IN" if src == "I" else src
+        bw = 26 if label == "IN" else 22
+        self_vals = matrix_cell(patch, cells, src, src)
+        self_tip = f"{src} self"
+        if self_vals:
+            self_tip += "\n" + "  ".join(f"{q} {self_vals[q]:+d}" for q in QUADS)
+        label_svg = badge(gx + i * size + (size - bw) / 2,
+                          gy + i * pitch + gap + (size - 17) / 2,
+                          label, destination_color(src), bw, 17,
+                          "#102030" if src != "I" else "#e6f1fb")
+        out.append(f'<g>{title_node(self_tip)}{label_svg}</g>')
+
+    # Output strip: one BL value per source column.
+    oy = gy + 9 * pitch
     out.append(text(gx - 10, oy + size / 2 + 3, "OUT", 8, ACCENT, "700", "end"))
     for j, src in enumerate(SRC_ORDER):
         vals = matrix_cell(patch, cells, src, "O")
@@ -628,21 +713,6 @@ def render_matrix(x, y, w, h, patch, cells):
             "  ".join(f"{q} {vals[q]:+d}" for q in QUADS) if vals else "no route field")
         out.append(matrix_output_cell(gx + j * size + 1, oy + 1,
                                       size - 2, size - 2, bl, tip))
-
-    # Diagonal operator labels.
-    for i, src in enumerate(SRC_ORDER):
-        label = "IN" if src == "I" else src
-        bw = 26 if label == "IN" else 22
-        self_vals = matrix_cell(patch, cells, src, src)
-        self_tip = f"{src} self"
-        if self_vals:
-            self_tip += "\n" + "  ".join(f"{q} {self_vals[q]:+d}" for q in QUADS)
-        tab_color = ACCENT if src == "A" else "#3f4f62"
-        tab_fg = "#102030" if src == "A" else "#e6f1fb"
-        label_svg = badge(gx + i * size + (size - bw) / 2,
-                          gy + i * size + (size - 17) / 2,
-                          label, tab_color, bw, 17, tab_fg)
-        out.append(f'<g>{title_node(self_tip)}{label_svg}</g>')
 
     # Slim PAN strip only when the patch uses pan routing.
     pan_cells = []
@@ -659,7 +729,7 @@ def render_matrix(x, y, w, h, patch, cells):
             out.append(matrix_pan_cell(gx + j * size + 1, py, size - 2, 20, bl, tip))
 
     # Legend
-    ly = y + h - 12
+    ly = y + h - 4
     out.append(text(x + 16, ly,
                     "above diagonal = affects earlier · below = affects later · "
                     "BL shown · hover for TL/TR/BL/BR · OUT = BL",
@@ -1067,16 +1137,16 @@ def render(path, title=None):
         f'<rect width="{W}" height="{H}" fill="url(#bg)"/>',
         render_header(meta, patch, path, cells),
         render_operators(M, 112, 620, 300, patch, cells, envs),
-        render_matrix(M, 426, 620, 560, patch, cells),
+        render_matrix(M, 426, 620, 620, patch, cells),
         render_envelopes(660, 112, 956, 726, patch, envs),
         render_keyscales(660, 854, 956, 140, patch),
         # bottom full-width context
-        panel(M, 1010, W - 2 * M, 360),
-        section_title(M + 16, 1034, "VOICE · MODULATION · EFFECTS",
+        panel(M, 1066, W - 2 * M, 360),
+        section_title(M + 16, 1090, "VOICE · MODULATION · EFFECTS",
                       "right-hand context for the matrix and envelopes"),
-        render_voice(M + 12, 1050, 500, 300, patch, cells),
-        render_lfo_arp(M + 524, 1050, 420, 300, patch),
-        render_effects(M + 956, 1050, 612, 300, patch),
+        render_voice(M + 12, 1106, 500, 300, patch, cells),
+        render_lfo_arp(M + 524, 1106, 420, 300, patch),
+        render_effects(M + 956, 1106, 612, 300, patch),
         render_footer(path),
         "</svg>",
     ]

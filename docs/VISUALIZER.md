@@ -15,7 +15,7 @@ python fm8svg.py patch.nfm8 --title "My patch"
 |---|---|---|
 | Header | name, author, comment, version, file, route/point counts | identifies the patch and how much structure it has |
 | Operators | waveform, ratio, offset, output, P/S/R/TS flags | the raw oscillator settings that the matrix modulates |
-| FM matrix | FM8-style diagonal labels (A–F, X, Z, IN), 9×9 cells, rows = destinations, columns = sources, one BL value per cell, hover for all TL/TR/BL/BR values, OUT row, optional PAN strip | the actual modulation topology, including output and pan |
+| FM matrix | FM8-style colored diagonal labels (A–F, X, Z, IN), a self-modulation cell above each label, 9×9 cells, rows = destinations, columns = sources, one BL value per cell, direction arrows, hover for all TL/TR/BL/BR values, OUT row, optional PAN strip | the actual modulation topology, including output and pan |
 | Envelopes | all nine destinations, absolute time, levels, slopes, flags, K/V amounts | timing and shape of every operator/filter/pitch envelope |
 | Key scaling | pitch, level and slope curves per destination | how the envelope changes across the keyboard |
 | Voice | filter, noise, saturation, master/input/transpose, unison, portamento | the post-matrix timbre and play mode |
@@ -35,6 +35,9 @@ adds the settings that are neither matrix nor envelope:
 * **destination rows, source columns** — a source feeding a later operator is
   below the diagonal; a source feeding an earlier operator is above it.  This
   is the orientation FM8 uses.
+* **self cells and arrows** — every operator label has a self-modulation cell
+  above it, and each active route has an arrow pointing toward the destination
+  operator, matching FM8's matrix cues.
 * **OUT and PAN** — output level is a matrix destination, and the pan law is a
   separate bipolar destination.  OUT is drawn as FM8's bottom strip; PAN is
   shown as a slim extra strip only when the patch uses it.
@@ -54,8 +57,8 @@ adds the settings that are neither matrix nor envelope:
 
 * The matrix uses FM8's diagonal-label layout rather than row/column headers.
   Rows are destinations and columns are sources; off-diagonal cells show the BL
-  value, and diagonal cells carry the operator labels and their self-route
-  value.
+  value, diagonal cells carry the colored operator labels, and the small cell
+  above each label is its self-modulation route.
 * Matrix fields are decoded from the stored bytes: standard cells are shown as
   signed values, `OUT` as 0..100, and `PAN` as a bipolar value.
 * The operator table shows the **BL** quadrant as the primary value.  An
