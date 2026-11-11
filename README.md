@@ -135,8 +135,9 @@ standard library. It is laid out as an FM8-style datasheet:
 * **header** — name, author, comment, version, file, active routes/points;
 * **operators** — waveform, ratio, offset, output level and P/S/R/TS flags for
   A–F, plus the filter/pitch destinations;
-* **FM matrix** — all nine sources × nine destinations with four independent
-  TL/TR/BL/BR quadrants, an OUT row and a PAN column;
+* **FM matrix** — FM8-style diagonal operator labels (A–F, X, Z, IN), four
+  independent TL/TR/BL/BR quadrants per cell, an OUT row, and a slim PAN strip
+  when the patch uses pan routing;
 * **breakpoint envelopes** — all nine destinations, with absolute-time axes,
   breakpoint handles (hover for time/level/slope) and sustain/release flags;
 * **key scaling** — compact pitch, level and slope curves for every destination;
@@ -147,7 +148,8 @@ Important details that are easy to miss when looking only at a matrix or only
 at envelope curves:
 
 * matrix cells are **four-quadrant** values, not one number;
-* `OUT` is the source-to-output level and `PAN` is a separate bipolar matrix;
+* `OUT` is the source-to-output level; `PAN` is a separate bipolar matrix and
+  is shown as an extra strip only when it is used;
 * envelope times are **absolute after the first delta**, and the last
   breakpoint is the release/sustain end point;
 * `P` is the pitch-envelope destination, `X`/`Z` are the filter destinations,

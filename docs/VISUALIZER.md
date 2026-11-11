@@ -15,7 +15,7 @@ python fm8svg.py patch.nfm8 --title "My patch"
 |---|---|---|
 | Header | name, author, comment, version, file, route/point counts | identifies the patch and how much structure it has |
 | Operators | waveform, ratio, offset, output, P/S/R/TS flags | the raw oscillator settings that the matrix modulates |
-| FM matrix | 9 sources × 9 destinations, four TL/TR/BL/BR quadrants, OUT row, PAN column | the actual modulation topology, including output and pan |
+| FM matrix | FM8-style diagonal labels (A–F, X, Z, IN), 9×9 cells, four TL/TR/BL/BR quadrants, OUT row, optional PAN strip | the actual modulation topology, including output and pan |
 | Envelopes | all nine destinations, absolute time, levels, slopes, flags, K/V amounts | timing and shape of every operator/filter/pitch envelope |
 | Key scaling | pitch, level and slope curves per destination | how the envelope changes across the keyboard |
 | Voice | filter, noise, saturation, master/input/transpose, unison, portamento | the post-matrix timbre and play mode |
@@ -32,7 +32,8 @@ adds the settings that are neither matrix nor envelope:
 * **four quadrants per matrix cell** — the FM8 matrix stores four values per
   source/destination pair.  Showing one number would hide most of the routing.
 * **OUT and PAN** — output level is a matrix destination, and the pan law is a
-  separate bipolar destination.  Both are easy to miss in the GUI matrix.
+  separate bipolar destination.  OUT is drawn as FM8's bottom strip; PAN is
+  shown as a slim extra strip only when the patch uses it.
 * **absolute time and release marker** — the stored times are a first absolute
   time followed by deltas.  The last breakpoint is the sustain/release end
   point; without an absolute axis the envelope is ambiguous.
@@ -47,6 +48,9 @@ adds the settings that are neither matrix nor envelope:
 
 ## Accuracy and limitations
 
+* The matrix uses FM8's diagonal-label layout rather than row/column headers.
+  Off-diagonal cells show four values; diagonal cells carry the operator labels
+  and show self-route dots.
 * Matrix fields are decoded from the stored bytes: standard cells are shown as
   signed values, `OUT` as 0..100, and `PAN` as a bipolar value.
 * The operator table shows the **BL** quadrant as the primary value.  An

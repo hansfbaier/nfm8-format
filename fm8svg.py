@@ -564,64 +564,157 @@ def matrix_cell_svg(x, y, size, values, tip):
                             "#f2fbff" if frac > 0.45 else "#c7d9e7",
                             "700", "middle"))
     out.append(line(x + size / 2, y + 1, x + size / 2, y + size - 1,
-                    GRID_SOFT, 0.7, 0.8))
+                    "#2f4c67", 0.7, 0.8))
     out.append(line(x + 1, y + size / 2, x + size - 1, y + size / 2,
-                    GRID_SOFT, 0.7, 0.8))
+                    "#2f4c67", 0.7, 0.8))
     out.append(rect(x, y, size, size, "none", GRID, 2))
     out.append(f"<g>{title_node(tip)}</g>")
     return "".join(out)
 
 
+def matrix_diagonal_svg(x, y, size, values, tip):
+    """FM8-style diagonal cell: a labelled pad with optional self-route dots."""
+    out = [rect(x, y, size, size, "#142235", GRID_SOFT, 2),
+           line(x + size / 2, y + 1, x + size / 2, y + size - 1,
+                "#2f4c67", 0.7, 0.8),
+           line(x + 1, y + size / 2, x + size - 1, y + size / 2,
+                "#2f4c67", 0.7, 0.8)]
+    if values:
+        qr = _matrix_quad_rects(x, y, size, size)
+        for q in QUADS:
+            v = values.get(q, 0)
+            if not v:
+                continue
+            qx, qy, qw, qh = qr[q]
+            out.append(f'<circle cx="{qx + qw / 2:.1f}" cy="{qy + qh / 2:.1f}" '
+                       f'r="1.8" fill="{"#4fc3f7" if v >= 0 else "#ff9f43"}"/>')
+    out.append(rect(x, y, size, size, "none", GRID, 2))
+    out.append(f"<g>{title_node(tip)}</g>")
+    return "".join(out)
+
+
+def matrix_output_cell(x, y, w, h, value, diff, tip):
+    """One cell of the FM8 output strip; shows the BL value, not four numbers."""
+    on = bool(value)
+    fill = "#2b7fa4" if value >= 0 else "#a45d2b"
+    out = [rect(x, y, w, h, PANEL_2, GRID_SOFT, 2),
+           line(x + 2, y + h / 2, x + w - 2, y + h / 2, GRID, 0.7, 0.7)]
+    if on:
+        out.append(rect(x + 2, y + 2, w - 4, h - 4, fill, "none", 2,
+                        0.12 + 0.55 * clamp(abs(value) / 100.0, 0, 1)))
+        out.append(text(x + w / 2, y + h / 2 + 3,
+                        f"{value}{'*' if diff else ''}", 8.5, "#f2fbff",
+                        "700", "middle"))
+    out.append(f"<g>{title_node(tip)}</g>")
+    return "".join(out)
+
+
+def matrix_pan_cell(x, y, w, h, value, diff, tip):
+    on = bool(value)
+    color = "#4fc3f7" if value >= 0 else "#ff9f43"
+    out = [rect(x, y, w, h, PANEL_2, GRID_SOFT, 2)]
+    if on:
+        out.append(rect(x + 1, y + 1, w - 2, h - 2, color, "none", 2,
+                        0.12 + 0.55 * clamp(abs(value) / 100.0, 0, 1)))
+        out.append(text(x + w / 2, y + h - 5,
+                        f"{value:+d}{'*' if diff else ''}", 7.2,
+                        "#f2fbff", "700", "middle"))
+    out.append(f"<g>{title_node(tip)}</g>")
+    return "".join(out)
+
+
 def render_matrix(x, y, w, h, patch, cells):
+    """FM8-style operator matrix.
+
+    The real FM8 panel has no row/column headers: the diagonal cells carry the
+    source/destination names (A–F, X, Z, IN).  We reproduce that layout, add a
+    separate OUT strip below it and keep a slim PAN strip as an extra.
+    """
     out = [panel(x, y, w, h),
            section_title(x + 16, y + 24, "FM MATRIX",
-                         "each cell has TL / TR / BL / BR quadrants · OUT and PAN included")]
-    size = 42
-    gx = x + 100
-    gy = y + 86
-    # column headers
-    for j, dest in enumerate(DEST_MAIN):
-        out.append(text(gx + j * size + size / 2, gy - 8, dest if dest != "I" else "IN",
-                        8, "#c9dced", "700", "middle"))
-    out.append(text(gx + 9 * size + size / 2, gy - 8, "PAN", 8, ACCENT, "700", "middle"))
-    # source headers and rows
+                         "diagonal = source/destination · four TL/TR/BL/BR quadrants · OUT row · PAN when used")]
+    size = 45
+    gx = x + (w - 9 * size) / 2
+    gy = y + 58
+    out_bl = []
+    out_diff = []
+
+    # Main 9x9 grid.  Diagonal cells are drawn without their labels first so
+    # the output route lines can pass underneath the labels.
     for i, src in enumerate(SRC_ORDER):
         ry = gy + i * size
-        out.append(text(gx - 10, ry + size / 2 + 3, src if src != "I" else "IN",
-                        9, "#c9dced", "700", "end"))
-        for j, dest in enumerate(DEST_MAIN):
+        for j, dest in enumerate(SRC_ORDER):
             vals = matrix_cell(patch, cells, src, dest)
             tip = f"{src} → {dest}\n" + (
                 "  ".join(f"{q} {vals[q]:+d}" for q in QUADS) if vals else "no route field")
-            out.append(matrix_cell_svg(gx + j * size + 2, ry + 2, size - 4,
-                                       vals, tip))
-        # pan column
-        vals = matrix_cell(patch, cells, src, "P")
-        tip = f"{src} → PAN\n" + (
-            "  ".join(f"{q} {vals[q]:+d}" for q in QUADS) if vals else "no route field")
-        out.append(matrix_cell_svg(gx + 9 * size + 2, ry + 2, size - 4,
-                                   vals, tip))
+            cx = gx + j * size + 1
+            cy = ry + 1
+            if i == j:
+                label = "IN" if src == "I" else src
+                out.append(matrix_diagonal_svg(cx, cy, size - 2, vals, tip))
+            else:
+                out.append(matrix_cell_svg(cx, cy, size - 2, vals, tip))
 
-    # output row
+    # Output strip: one BL value per source, like the 80 shown in FM8.
     oy = gy + 9 * size
     out.append(text(gx - 10, oy + size / 2 + 3, "OUT", 8, ACCENT, "700", "end"))
-    for j, src in enumerate(DEST_MAIN):
+    for j, src in enumerate(SRC_ORDER):
         vals = matrix_cell(patch, cells, src, "O")
+        bl = vals["BL"] if vals else 0
+        diff = bool(vals) and len({vals[q] for q in QUADS}) > 1
+        out_bl.append(bl)
+        out_diff.append(diff)
         tip = f"{src} → OUT\n" + (
             "  ".join(f"{q} {vals[q]:+d}" for q in QUADS) if vals else "no route field")
-        out.append(matrix_cell_svg(gx + j * size + 2, oy + 2, size - 4,
-                                   vals, tip))
-    out.append(rect(gx + 9 * size + 2, oy + 2, size - 4, size - 4, PANEL_2, GRID_SOFT, 2))
+        out.append(matrix_output_cell(gx + j * size + 1, oy + 1,
+                                      size - 2, size - 2, bl, diff, tip))
 
-    # legend / explanation
-    lx, ly = x + 16, y + h - 34
-    out.append(rect(lx, ly - 10, 18, 18, PANEL_2, GRID_SOFT, 2))
-    for label, qx, qy, col in [("TL", 0, 0, "#4fc3f7"), ("TR", 9, 0, "#ff9f43"),
-                               ("BL", 0, 9, "#4fc3f7"), ("BR", 9, 9, "#4fc3f7")]:
-        out.append(rect(lx + qx, ly - 10 + qy, 8, 8, col, "none", 1, 0.6))
-    out.append(text(lx + 26, ly + 3, "quadrants", 8, MUTED))
-    out.append(text(lx + 90, ly + 3, "blue = positive · orange = negative · hover for values", 8, MUTED))
-    out.append(text(x + w - 16, ly + 3, "OUT = 0..100 · PAN = −100..100", 8, MUTED, "normal", "end"))
+    # Route lines, strongest three outputs only.
+    for _, i in sorted((abs(v), i) for i, v in enumerate(out_bl))[-3:]:
+        if not out_bl[i]:
+            continue
+        lx = gx + i * size + size / 2
+        out.append(line(lx, gy + i * size + size - 4, lx, oy + 4,
+                        "#cfe8ff", 1.2, 0.32))
+
+    # Diagonal labels, on top of the route lines.
+    for i, src in enumerate(SRC_ORDER):
+        label = "IN" if src == "I" else src
+        bw = 26 if label == "IN" else 22
+        self_vals = matrix_cell(patch, cells, src, src)
+        if self_vals:
+            self_tip = src + " self" + chr(10) + "  ".join(
+                f"{q} {self_vals[q]:+d}" for q in QUADS)
+        else:
+            self_tip = f"{src} self"
+        label_svg = badge(gx + i * size + (size - bw) / 2,
+                          gy + i * size + (size - 17) / 2,
+                          label, destination_color(src), bw, 17)
+        out.append(f'<g>{title_node(self_tip)}{label_svg}</g>')
+
+    # Slim PAN strip: not part of FM8's drawn matrix.  Only show it when the
+    # patch actually uses pan routing, so the normal view stays FM8-like.
+    pan_cells = []
+    for src in SRC_ORDER:
+        vals = matrix_cell(patch, cells, src, "P")
+        bl = vals["BL"] if vals else 0
+        diff = bool(vals) and len({vals[q] for q in QUADS}) > 1
+        tip = f"{src} → PAN\n" + (
+            "  ".join(f"{q} {vals[q]:+d}" for q in QUADS) if vals else "no route field")
+        pan_cells.append((bl, diff, tip))
+    if any(bl for bl, _, _ in pan_cells):
+        py = oy + size + 4
+        out.append(text(gx - 10, py + 14, "PAN", 7, ACCENT, "700", "end"))
+        for j, (bl, diff, tip) in enumerate(pan_cells):
+            out.append(matrix_pan_cell(gx + j * size + 1, py, size - 2, 20,
+                                       bl, diff, tip))
+
+    # Legend
+    ly = y + h - 12
+    out.append(text(x + 16, ly,
+                    "diagonal = source/destination · quadrants TL TR / BL BR · "
+                    "blue + / orange − · OUT = BL · PAN when used",
+                    7.8, MUTED))
     return "".join(out)
 
 
