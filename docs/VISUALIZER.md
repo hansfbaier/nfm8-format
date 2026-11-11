@@ -16,7 +16,7 @@ python fm8svg.py patch.nfm8 --title "My patch"
 | Header | name, author, comment, version, file, route/point counts | identifies the patch and how much structure it has |
 | Operators | waveform, ratio, offset, output, P/S/R/TS flags | the raw oscillator settings that the matrix modulates |
 | FM matrix | FM8-style colored diagonal labels (A–F, X, Z, IN), a self-modulation cell above each label, 9×9 cells, rows = destinations, columns = sources, one BL value per cell, straight source spokes, arrowheads only into operator labels, hover for all TL/TR/BL/BR values, OUT row, optional PAN strip | the actual modulation topology, including output and pan |
-| Envelopes | all nine destinations, absolute time, levels, slopes, flags, K/V amounts | timing and shape of every operator/filter/pitch envelope |
+| Envelopes | all nine destinations, absolute time, a tick and time label for every breakpoint, levels, slopes, flags, K/V amounts | timing and shape of every operator/filter/pitch envelope |
 | Key scaling | pitch, level and slope curves per destination | how the envelope changes across the keyboard |
 | Voice | filter, noise, saturation, master/input/transpose, unison, portamento | the post-matrix timbre and play mode |
 | LFO / ARP | both LFOs, arpeggiator settings | movement and note pattern |
@@ -43,8 +43,8 @@ adds the settings that are neither matrix nor envelope:
   separate bipolar destination.  OUT is drawn as FM8's bottom strip; PAN is
   shown as a slim extra strip only when the patch uses it.
 * **absolute time and release marker** — the stored times are a first absolute
-  time followed by deltas.  The last breakpoint is the sustain/release end
-  point; without an absolute axis the envelope is ambiguous.
+  time followed by deltas.  Every breakpoint gets a tick and a time label on
+  the axis; the last breakpoint is the sustain/release end point.
 * **P/S/R/TS and K/V** — `P.Env`, `Env Loop` (`Sus`), `Env Rel`, tempo sync, key
   scaling and velocity scaling are separate fields; they are not encoded in the
   curve itself.

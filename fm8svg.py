@@ -666,9 +666,9 @@ def render_matrix(x, y, w, h, patch, cells):
     for x1, y1, x2, y2 in route_arrows:
         out.append(arrow_svg(x1, y1, x2, y2))
 
-    # Source-output spines.  Every operator column sends arrows downward to
-    # nonzero cells below it and to its OUT cell, and upward to nonzero cells
-    # above it or to its own self-modulation cell.
+    # Source-output spines.  Every operator column sends straight lines down to
+    # nonzero cells below it and to its OUT cell, and up to nonzero cells above
+    # it.  Self modulation gets its own loop arrow into the operator.
     oy = gy + 9 * pitch
     for i, src in enumerate(SRC_ORDER):
         xc = gx + i * size + size / 2
@@ -677,9 +677,6 @@ def render_matrix(x, y, w, h, patch, cells):
         label_bottom = label_top + size - 2
         up = []
         down = []
-        self_vals = matrix_cell(patch, cells, src, src)
-        if self_vals and self_vals["BL"]:
-            up.append(row_top + 1 + (gap - 2) / 2)
         for r, dest in enumerate(SRC_ORDER):
             if r == i:
                 continue
@@ -699,6 +696,28 @@ def render_matrix(x, y, w, h, patch, cells):
             out.append(line(xc, label_top, xc, min(up), color, 1.0, 0.45))
         if down:
             out.append(line(xc, label_bottom, xc, max(down), color, 1.0, 0.45))
+
+    # Self-modulation loop arrows: the self cell feeds back into the operator.
+    for i, src in enumerate(SRC_ORDER):
+        self_vals = matrix_cell(patch, cells, src, src)
+        if not (self_vals and self_vals["BL"]):
+            continue
+        row_top = gy + i * pitch
+        sx = gx + i * size + 1
+        sy = row_top + 1
+        sw, sh = size - 2, gap - 2
+        label_right = gx + (i + 1) * size - 1
+        label_mid = row_top + gap + 1 + (size - 2) / 2
+        loop_x = label_right + 8
+        color = "#cfe8ff"
+        out.append(f'<path d="M {sx + sw:.1f} {sy + sh / 2:.1f} '
+                   f'H {loop_x:.1f} V {label_mid:.1f} H {label_right - 1:.1f}" '
+                   f'fill="none" stroke="{color}" stroke-width="1" '
+                   f'stroke-opacity="0.75"/>')
+        out.append(f'<polygon points="{label_right - 1:.1f},{label_mid:.1f} '
+                   f'{label_right + 5:.1f},{label_mid - 3:.1f} '
+                   f'{label_right + 5:.1f},{label_mid + 3:.1f}" '
+                   f'fill="{color}" fill-opacity="0.75"/>')
 
     # Colored operator labels on the diagonal.
     for i, src in enumerate(SRC_ORDER):
@@ -810,10 +829,46 @@ def render_envelope_card(x, y, w, h, dest, env):
     out.append(text(px - 5, py + 3, "1", 7.5, MUTED, "normal", "end"))
     out.append(text(px - 5, py + ph / 2 + 3, "0.5", 7.5, MUTED, "normal", "end"))
     out.append(text(px - 5, py + ph + 3, "0", 7.5, MUTED, "normal", "end"))
-    out.append(text(px, py + ph + 14, "0", 7.5, MUTED))
-    out.append(text(px + pw / 2, py + ph + 14, fmt_time(tmax / 2), 7.5, MUTED, "normal", "middle"))
-    out.append(text(px + pw, py + ph + 14, fmt_time(tmax), 7.5, MUTED, "normal", "end"))
-    out.append(text(px + pw, py + ph + 24, "absolute time", 7, DIM, "normal", "end"))
+    # Mark every breakpoint time on the time axis.  Short envelopes get
+    # readable horizontal labels on two staggered rows; dense envelopes use
+    # rotated labels so every point still gets a tick and a time.
+    bps = env.breakpoints
+    if len(bps) <= 6:
+        entries = []
+        for bp in bps:
+            bx = px + clamp(bp.abs_time_ms / tmax, 0, 1) * (pw - 6)
+            label = fmt_time(bp.abs_time_ms)
+            out.append(line(bx, py + ph, bx, py + ph + 3, color, 0.7, 0.8))
+            entries.append((bx, label, len(label) * 3.4))
+        last = [-1e9, -1e9]
+        rows = []
+        for bx, label, width in entries:
+            left, right = bx - width / 2, bx + width / 2
+            row = 0
+            while row < 2 and left <= last[row] + 2:
+                row += 1
+            if row == 2:
+                row = 0 if last[0] <= last[1] else 1
+            last[row] = right
+            rows.append(row)
+        for (bx, label, _), row in zip(entries, rows):
+            ty = py + ph + 13 + row * 11
+            anchor = "middle"
+            tx = bx
+            if bx < px + 12:
+                anchor, tx = "start", px
+            elif bx > px + pw - 12:
+                anchor, tx = "end", px + pw
+            out.append(text(tx, ty, label, 6.2, MUTED, "normal", anchor))
+    else:
+        for bp in bps:
+            bx = px + clamp(bp.abs_time_ms / tmax, 0, 1) * (pw - 6)
+            out.append(line(bx, py + ph, bx, py + ph + 3, color, 0.7, 0.8))
+            ty = py + ph + 26
+            out.append(f'<text x="{bx:.1f}" y="{ty:.1f}" '
+                       f'transform="rotate(-90 {bx:.1f} {ty:.1f})" '
+                       f'font-family="{FONT}" font-size="5.6" fill="{MUTED}">'
+                       f'{esc(fmt_time(bp.abs_time_ms))}</text>')
 
     pts = envelope_points(env, px, py, pw - 6, ph, tmax)
     if pts:
