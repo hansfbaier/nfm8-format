@@ -795,7 +795,8 @@ def envelope_points(env, x0, y0, w, h, tmax):
         x_start = x0 + clamp(t0 / tmax, 0, 1) * w
         y_start = y0 + (1.0 - clamp(l0, 0, 1)) * h
         slope = clamp(env.slopes[i - 1] if i - 1 < len(env.slopes) else 0.5, 0, 1)
-        gamma = 2.0 ** ((0.5 - slope) * 4.0)
+        # Slope 0.5 is linear; larger values bend the curve the other way.
+        gamma = 2.0 ** ((slope - 0.5) * 4.0)
         n = max(2, int(28 * abs(x - x_start) / max(w, 1)) + 2)
         for k in range(1, n + 1):
             f = k / n
