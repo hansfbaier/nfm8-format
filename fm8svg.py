@@ -640,7 +640,7 @@ def render_matrix(x, y, w, h, patch, cells):
         self_bl = self_vals["BL"] if self_vals else 0
         self_tip = f"{dest} self\n" + (
             "  ".join(f"{q} {self_vals[q]:+d}" for q in QUADS) if self_vals else "no route field")
-        out.append(matrix_self_cell(gx + i * size + 1, row_top + 1,
+        out.append(matrix_self_cell(gx + i * size + 1, row_top + 4,
                                     size - 2, gap - 6, self_bl,
                                     destination_color(dest), self_tip))
         for j, src in enumerate(SRC_ORDER):
@@ -705,7 +705,7 @@ def render_matrix(x, y, w, h, patch, cells):
             continue
         row_top = gy + i * pitch
         sx = gx + i * size + 1
-        sy = row_top + 1
+        sy = row_top + 4
         sw, sh = size - 2, gap - 6
         label_right = gx + (i + 1) * size - 1
         label_mid = row_top + gap + 2 + (size - 2) / 2
