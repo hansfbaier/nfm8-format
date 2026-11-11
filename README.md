@@ -137,8 +137,9 @@ standard library. It is laid out as an FM8-style datasheet:
   A–F, plus the filter/pitch destinations;
 * **FM matrix** — FM8-style colored diagonal operator labels (A–F, X, Z, IN),
   a self-modulation cell above every label, one BL value per route cell,
-  modulation-direction arrows, an OUT row, and a slim PAN strip when the patch
-  uses pan routing. Rows are destinations and columns are sources, so a source
+  straight source spokes, arrowheads only where a route enters an operator,
+  an OUT row, and a slim PAN strip when the patch uses pan routing. Rows are
+  destinations and columns are sources, so a source
   feeding a later operator appears below the diagonal and a source feeding an
   earlier operator appears above it; hover for all four TL/TR/BL/BR values;
 * **breakpoint envelopes** — all nine destinations, with absolute-time axes,
@@ -153,7 +154,8 @@ at envelope curves:
 * the file stores **four quadrant** values per cell; FM8 displays the BL value,
   and the chart puts all four in the hover text;
 * the matrix is destination-by-source: later targets are below the diagonal,
-  earlier targets above it, and arrows point toward the affected operator;
+  earlier targets above it; vertical source spokes are straight, and arrowheads
+  appear only where a route enters an operator label;
 * each operator label has a small self-modulation cell directly above it;
 * `OUT` is the source-to-output level; `PAN` is a separate bipolar matrix and
   is shown as an extra strip only when it is used;

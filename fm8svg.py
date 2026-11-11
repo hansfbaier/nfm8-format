@@ -666,28 +666,39 @@ def render_matrix(x, y, w, h, patch, cells):
     for x1, y1, x2, y2 in route_arrows:
         out.append(arrow_svg(x1, y1, x2, y2))
 
-    # Self-route loops.
-    for i, dest in enumerate(SRC_ORDER):
-        self_vals = matrix_cell(patch, cells, dest, dest)
-        if not (self_vals and self_vals["BL"]):
-            continue
+    # Source-output spines.  Every operator column sends arrows downward to
+    # nonzero cells below it and to its OUT cell, and upward to nonzero cells
+    # above it or to its own self-modulation cell.
+    oy = gy + 9 * pitch
+    for i, src in enumerate(SRC_ORDER):
+        xc = gx + i * size + size / 2
         row_top = gy + i * pitch
-        sx = gx + i * size + 1
-        sy = row_top + 1
-        sw, sh = size - 2, gap - 2
-        label_right = gx + (i + 1) * size - 1
         label_top = row_top + gap + 1
-        label_mid = label_top + (size - 2) / 2
-        loop_x = label_right + 8
+        label_bottom = label_top + size - 2
+        up = []
+        down = []
+        self_vals = matrix_cell(patch, cells, src, src)
+        if self_vals and self_vals["BL"]:
+            up.append(row_top + 1 + (gap - 2) / 2)
+        for r, dest in enumerate(SRC_ORDER):
+            if r == i:
+                continue
+            vals = matrix_cell(patch, cells, src, dest)
+            if not (vals and vals["BL"]):
+                continue
+            target_top = gy + r * pitch + gap + 1
+            if r < i:
+                up.append(target_top + size - 2)
+            else:
+                down.append(target_top)
+        out_vals = matrix_cell(patch, cells, src, "O")
+        if out_vals and out_vals["BL"]:
+            down.append(oy + 1)
         color = "#cfe8ff"
-        out.append(f'<path d="M {sx + sw:.1f} {sy + sh / 2:.1f} '
-                   f'H {loop_x:.1f} V {label_mid:.1f} H {label_right - 1:.1f}" '
-                   f'fill="none" stroke="{color}" stroke-width="1" '
-                   f'stroke-opacity="0.75"/>')
-        out.append(f'<polygon points="{label_right - 1:.1f},{label_mid:.1f} '
-                   f'{label_right + 5:.1f},{label_mid - 3:.1f} '
-                   f'{label_right + 5:.1f},{label_mid + 3:.1f}" '
-                   f'fill="{color}" fill-opacity="0.75"/>')
+        if up:
+            out.append(line(xc, label_top, xc, min(up), color, 1.0, 0.45))
+        if down:
+            out.append(line(xc, label_bottom, xc, max(down), color, 1.0, 0.45))
 
     # Colored operator labels on the diagonal.
     for i, src in enumerate(SRC_ORDER):

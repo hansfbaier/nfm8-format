@@ -15,7 +15,7 @@ python fm8svg.py patch.nfm8 --title "My patch"
 |---|---|---|
 | Header | name, author, comment, version, file, route/point counts | identifies the patch and how much structure it has |
 | Operators | waveform, ratio, offset, output, P/S/R/TS flags | the raw oscillator settings that the matrix modulates |
-| FM matrix | FM8-style colored diagonal labels (A–F, X, Z, IN), a self-modulation cell above each label, 9×9 cells, rows = destinations, columns = sources, one BL value per cell, direction arrows, hover for all TL/TR/BL/BR values, OUT row, optional PAN strip | the actual modulation topology, including output and pan |
+| FM matrix | FM8-style colored diagonal labels (A–F, X, Z, IN), a self-modulation cell above each label, 9×9 cells, rows = destinations, columns = sources, one BL value per cell, straight source spokes, arrowheads only into operator labels, hover for all TL/TR/BL/BR values, OUT row, optional PAN strip | the actual modulation topology, including output and pan |
 | Envelopes | all nine destinations, absolute time, levels, slopes, flags, K/V amounts | timing and shape of every operator/filter/pitch envelope |
 | Key scaling | pitch, level and slope curves per destination | how the envelope changes across the keyboard |
 | Voice | filter, noise, saturation, master/input/transpose, unison, portamento | the post-matrix timbre and play mode |
@@ -36,8 +36,9 @@ adds the settings that are neither matrix nor envelope:
   below the diagonal; a source feeding an earlier operator is above it.  This
   is the orientation FM8 uses.
 * **self cells and arrows** — every operator label has a self-modulation cell
-  above it, and each active route has an arrow pointing toward the destination
-  operator, matching FM8's matrix cues.
+  above it.  Source-to-cell and source-to-OUT spokes are straight lines; only
+  the final edge into a destination operator label carries an arrowhead, as in
+  FM8.
 * **OUT and PAN** — output level is a matrix destination, and the pan law is a
   separate bipolar destination.  OUT is drawn as FM8's bottom strip; PAN is
   shown as a slim extra strip only when the patch uses it.
