@@ -177,6 +177,12 @@ fields that are not in the measured parameter schema (currently Phaser, Flanger
 and Tremolo) are shown as `?`. See [`docs/VISUALIZER.md`](docs/VISUALIZER.md)
 for the layout and limitations.
 
+### Example
+
+[`examples/test.nfm8`](examples/test.nfm8) rendered with the tool:
+
+[![FM8 test patch visualization](examples/test.svg)](examples/test.svg)
+
 As a library:
 
 ```python
