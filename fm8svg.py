@@ -785,7 +785,9 @@ def envelope_points(env, x0, y0, w, h, tmax):
         x1 = x0 + clamp(times[0] / tmax, 0, 1) * w
         y1 = y0 + (1.0 - clamp(levels[0], 0, 1)) * h
         slope = clamp(env.slopes[0] if env.slopes else 0.5, 0, 1)
-        gamma = 2.0 ** ((slope - 0.5) * 4.0)
+        # An attack rises from zero; its curvature is the mirror image of the
+        # decay segments, so invert the slope exponent for this first segment.
+        gamma = 2.0 ** ((0.5 - slope) * 4.0)
         n = max(2, int(28 * abs(x1 - x0) / max(w, 1)) + 2)
         for k in range(0, n + 1):
             f = k / n
